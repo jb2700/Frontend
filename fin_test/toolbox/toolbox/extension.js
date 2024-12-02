@@ -287,7 +287,7 @@ async function handleBackendResponseFromData(data) {
   console.log("HERE IS THE CONTENT");
   console.log(data.response.message.content);
   console.log("HERE IS THE CODE");
-  console.log(data.response.message.content['code']);
+  console.log(data.code);
 
     // // Parse the backend JSON response
     // let backendResponse;
