@@ -8,7 +8,10 @@ const path = require("path");
 const bodyParser = require("body-parser");
 const WebSocket = require("ws");
 const app = express();
+const resampler = require("audio-resampler");
 const port = 4001;
+// const pcm = require("pcm");
+const AudioBufferUtils = require("audio-buffer-utils");
 
 const fs = require("fs");
 const { exec } = require("child_process");
@@ -41,7 +44,8 @@ wss.on("connection", (ws) => {
     console.log(`Received message: ${messageString}`);
     // Handle start and stop recording
     if (messageString === "start") {
-      startRecording();
+      // startRecording();
+      startRecordingnew();
     } else if (messageString === "stop") {
       stopRecording();
     }
@@ -64,6 +68,109 @@ server.on("upgrade", (request, socket, head) => {
     wss.emit("connection", ws, request);
   });
 });
+
+let socket = new WebSocket("ws://142.112.54.19:43102");
+
+socket.onopen = () => {
+  console.log("WebSocket connected. Sending audio stream...");
+};
+
+socket.onmessage = (event) => {
+  console.log("Recieved this message");
+  console.log(event);
+  console.log("Received message from WebSocket server:", event.data);
+};
+
+socket.onerror = (error) => {
+  console.error("WebSocket error:", error.message);
+};
+
+function convertRawTo16bitPCM(data) {
+  // We assume `data` is an ArrayBuffer containing 32-bit PCM data.
+  const length = data.byteLength / 4; // 4 bytes per 32-bit sample
+  const outputData = new Int16Array(length);
+
+  const view = new DataView(data);
+  for (let i = 0; i < length; i++) {
+    // Read 32-bit signed integer (4 bytes)
+    const sample = view.getInt32(i * 4, true); // Little-endian
+    // Clamp to the 16-bit range (-32768 to 32767)
+    outputData[i] = Math.max(-32768, Math.min(32767, sample));
+  }
+
+  return outputData.buffer; // Return raw 16-bit PCM data as ArrayBuffer
+}
+
+function startRecordingnew() {
+  const outputFilePath = path.join(__dirname, "audio", "recording.wav");
+
+  // Start recording with sox, piping the output to stdout
+  const sox = exec(
+    `sox -d -r 16000 -c 1 -b 16 -t raw rate 16000`, // Command to stream audio to stdout
+    (error, stdout, stderr) => {
+      if (error) {
+        console.error(`Error starting recording: ${error.message}`);
+        return;
+      }
+      if (stderr) {
+        console.error(`stderr: ${stderr}`);
+        return;
+      }
+      console.log(`stdout: ${stdout}`);
+    }
+  );
+  // Set up a stream to capture audio data as it comes out of sox stdout
+  sox.stdout.on("data", (data) => {
+    // Convert the raw data to 16-bit PCM at 16000Hz
+    if (socket.readyState === WebSocket.OPEN) {
+      const sampleRate = 16000;
+
+      // Resample the audio from 48000Hz to 16000Hz using audio-resampler
+      resampler
+        .resample(data, 48000, sampleRate)
+        .then((resampledData) => {
+          // Convert the resampled data to 16-bit PCM
+          const outputData = convertRawTo16bitPCM(resampledData);
+
+          // Create the metadata and combine it with audio data
+          const metadata = JSON.stringify({ sampleRate: sampleRate });
+          const metadataBytes = new TextEncoder().encode(metadata);
+
+          // 4-byte integer indicating the length of the metadata
+          const metadataLength = new ArrayBuffer(4);
+          const metadataLengthView = new DataView(metadataLength);
+          metadataLengthView.setInt32(0, metadataBytes.byteLength, true); // Little-endian
+
+          const metadataLengthBuffer = Buffer.from(metadataLength);
+          const metadataBytesBuffer = Buffer.from(metadataBytes);
+          const audioDataBuffer = Buffer.from(outputData);
+
+          // Combine metadata, metadata length, and audio data
+          const combinedData = Buffer.concat([
+            metadataLengthBuffer,
+            metadataBytesBuffer,
+            audioDataBuffer,
+          ]);
+
+          console.log(`Audio data size: ${combinedData.length} bytes`);
+
+          // Send the combined data as a binary message to the WebSocket server
+          socket.send(combinedData);
+        })
+        .catch((err) => {
+          console.error("Error resampling audio:", err);
+        });
+    }
+  });
+
+  socket.onclose = () => {
+    console.log("WebSocket connection closed.");
+    sox.kill(); // Stop recording when WebSocket connection is closed
+  };
+
+  // Handle WebSocket connection
+  // socket = new WebSocket("ws://142.112.54.19:43102");
+}
 
 // Start recording process
 let recordingProcess = null;
@@ -144,7 +251,6 @@ async function send_to_backend() {
       return acc;
     }, {});
 
-
     const id = generateRandomId();
 
     // Prepare the JSON structure
@@ -180,8 +286,7 @@ async function send_to_backend() {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(payload
-      ),
+      body: JSON.stringify(payload),
     })
       .then((response) => response.json())
       .then((data) => {
@@ -193,14 +298,14 @@ async function send_to_backend() {
         console.error("Error:", error);
       });
     //  async -> IP: 142.112.54.19:43186
-    // send the /context endpoint first 
+    // send the /context endpoint first
     // and then send the user prompt (/prompt)
     // http://142.112.54.19:43186/prompt
 
     const new_pay = {
       userid: "generated_from_github",
       conversationid: id,
-      prompt: "Write a calculator function in python"
+      prompt: "Write a calculator function in python",
     };
 
     await fetch("http://142.112.54.19:43186/prompt", {
@@ -215,14 +320,11 @@ async function send_to_backend() {
         // Handle the response data
         console.log(data);
         handleBackendResponseFromData(data);
-
       })
       .catch((error) => {
         // Handle any errors
         console.error("Error:", error);
       });
-
-
   } else {
     console.log("No editor is open or active.");
   }
@@ -271,11 +373,8 @@ function activate(context) {
 // This function can be used to get the position based on line number
 function getEditorPositionForLine(lineNumber) {
   // Assuming each line is separated by a newline and line numbers are 1-based
-  return new vscode.Position(lineNumber, 0); 
+  return new vscode.Position(lineNumber, 0);
 }
-
-
-
 
 async function handleBackendResponseFromData(data) {
   console.log("HERE IS THE DATA");
@@ -289,56 +388,47 @@ async function handleBackendResponseFromData(data) {
   console.log("HERE IS THE CODE");
   console.log(data.code);
 
-    // // Parse the backend JSON response
-    // let backendResponse;
-    // try {
-    //   backendResponse = JSON.parse(data);
-    // } catch (parseErr) {
-    //   console.error("Error parsing backend response JSON:", parseErr);
-    //   return;
-    // }
+  // // Parse the backend JSON response
+  // let backendResponse;
+  // try {
+  //   backendResponse = JSON.parse(data);
+  // } catch (parseErr) {
+  //   console.error("Error parsing backend response JSON:", parseErr);
+  //   return;
+  // }
 
-    
+  // Ensure the structure exists before accessing the code
+  if (data && data.response && data.response.message.content) {
+    if (data.response.message.content.code) {
+      console.log("Code exists:", data.response.message.content.code);
 
-    // Ensure the structure exists before accessing the code
-    if (
-      data &&
-      data.response &&
-      data.response.message.content
-    ) {
-  if (data.response.message.content.code) {
-    console.log("Code exists:", data.response.message.content.code);
-
-    try {
-      const entries = Object.entries(data.response.message.content.code);
-      console.log("Entries:", entries);
-    } catch (error) {
-      console.error("Error processing code:", error);
-    }
-  } else {
-    console.log("Code is undefined or null");
-  }
-
-      const codeLines = data.response.message.content.code;
-
-      // Iterate over the code lines from the backend and insert them in the editor at the correct positions
-      for (const [lineNumber, code] of Object.entries(codeLines)) {
-        console.log("here is the line number");
-        console.log(lineNumber);
-
-        // Convert lineNumber to an integer for correct position
-        const position = getEditorPositionForLine(Number(lineNumber));
-
-        // Insert the code at the correct position
-        await insertCodeAtPosition(opened_editor, position, code); // Await to ensure sequential execution
+      try {
+        const entries = Object.entries(data.response.message.content.code);
+        console.log("Entries:", entries);
+      } catch (error) {
+        console.error("Error processing code:", error);
       }
     } else {
-      console.error("No code found in the backend response.");
+      console.log("Code is undefined or null");
     }
+
+    const codeLines = data.response.message.content.code;
+
+    // Iterate over the code lines from the backend and insert them in the editor at the correct positions
+    for (const [lineNumber, code] of Object.entries(codeLines)) {
+      console.log("here is the line number");
+      console.log(lineNumber);
+
+      // Convert lineNumber to an integer for correct position
+      const position = getEditorPositionForLine(Number(lineNumber));
+
+      // Insert the code at the correct position
+      await insertCodeAtPosition(opened_editor, position, code); // Await to ensure sequential execution
+    }
+  } else {
+    console.error("No code found in the backend response.");
   }
-
-
-
+}
 
 // async -> IP: 142.112.54.19:43186
 function handleBackendResponseFromFile() {

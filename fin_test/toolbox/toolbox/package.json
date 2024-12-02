@@ -33,9 +33,12 @@
     "eslint": "^9.13.0"
   },
   "dependencies": {
+    "audio-buffer-utils": "^5.1.2",
+    "audio-resampler": "^1.0.1",
     "express": "^4.21.1",
     "node-microphone": "^0.1.6",
     "open": "^10.1.0",
+    "pcm": "^1.0.3",
     "wav": "^1.0.2",
     "ws": "^8.18.0"
   }
