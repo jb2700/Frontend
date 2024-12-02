@@ -131,7 +131,7 @@ function generateRandomId() {
   return Math.floor(Math.random() * 1000000); // Example of random ID generation
 }
 
-function send_to_backend() {
+async function send_to_backend() {
   if (opened_editor) {
     const document = opened_editor.document;
     const text = document.getText();
@@ -144,11 +144,14 @@ function send_to_backend() {
       return acc;
     }, {});
 
+
+    const id = generateRandomId();
+
     // Prepare the JSON structure
     const payload = {
       context: context,
       userid: "generated_from_github", // Replace this with actual logic to fetch the Github user ID
-      conversationid: generateRandomId(), // Generate a random ID for the conversation
+      conversationid: id, // Generate a random ID for the conversation
     };
 
     // Convert the payload to a JSON string
@@ -168,15 +171,17 @@ function send_to_backend() {
     // Optionally, send the payload to the backend instead of writing it to a file
     // sendToBackendAPI(payload);
 
+    console.log("I AM HERE");
 
+    console.log(JSON.stringify(payload));
 
-    fetch("http://142.112.54.19:43186/context", {
+    await fetch("http://142.112.54.19:43186/context", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({payload
-      }),
+      body: JSON.stringify(payload
+      ),
     })
       .then((response) => response.json())
       .then((data) => {
@@ -191,6 +196,32 @@ function send_to_backend() {
     // send the /context endpoint first 
     // and then send the user prompt (/prompt)
     // http://142.112.54.19:43186/prompt
+
+    const new_pay = {
+      userid: "generated_from_github",
+      conversationid: id,
+      prompt: "Write a calculator function in python"
+    };
+
+    await fetch("http://142.112.54.19:43186/prompt", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(new_pay),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        // Handle the response data
+        console.log(data);
+        handleBackendResponseFromData(data);
+
+      })
+      .catch((error) => {
+        // Handle any errors
+        console.error("Error:", error);
+      });
+
 
   } else {
     console.log("No editor is open or active.");
@@ -240,10 +271,71 @@ function activate(context) {
 // This function can be used to get the position based on line number
 function getEditorPositionForLine(lineNumber) {
   // Assuming each line is separated by a newline and line numbers are 1-based
-  return new vscode.Position(lineNumber, 0); // 0 is the start of the line
+  return new vscode.Position(lineNumber, 0); 
 }
 
 
+
+
+async function handleBackendResponseFromData(data) {
+  console.log("HERE IS THE DATA");
+  console.log(data);
+  console.log("HERE IS THE RESPONSE");
+  console.log(data.response);
+  console.log("HERE IS THE MESSAGE");
+  console.log(data.response.message);
+  console.log("HERE IS THE CONTENT");
+  console.log(data.response.message.content);
+  console.log("HERE IS THE CODE");
+  console.log(data.response.message.content['code']);
+
+    // // Parse the backend JSON response
+    // let backendResponse;
+    // try {
+    //   backendResponse = JSON.parse(data);
+    // } catch (parseErr) {
+    //   console.error("Error parsing backend response JSON:", parseErr);
+    //   return;
+    // }
+
+    
+
+    // Ensure the structure exists before accessing the code
+    if (
+      data &&
+      data.response &&
+      data.response.message.content
+    ) {
+  if (data.response.message.content.code) {
+    console.log("Code exists:", data.response.message.content.code);
+
+    try {
+      const entries = Object.entries(data.response.message.content.code);
+      console.log("Entries:", entries);
+    } catch (error) {
+      console.error("Error processing code:", error);
+    }
+  } else {
+    console.log("Code is undefined or null");
+  }
+
+      const codeLines = data.response.message.content.code;
+
+      // Iterate over the code lines from the backend and insert them in the editor at the correct positions
+      for (const [lineNumber, code] of Object.entries(codeLines)) {
+        console.log("here is the line number");
+        console.log(lineNumber);
+
+        // Convert lineNumber to an integer for correct position
+        const position = getEditorPositionForLine(Number(lineNumber));
+
+        // Insert the code at the correct position
+        await insertCodeAtPosition(opened_editor, position, code); // Await to ensure sequential execution
+      }
+    } else {
+      console.error("No code found in the backend response.");
+    }
+  }
 
 
 
@@ -387,7 +479,7 @@ function openSidebar() {
           }
           send_to_backend();
           // insertCodeAtPosition(opened_editor, last_cursor_position, data);
-          handleBackendResponseFromFile();
+          // handleBackendResponseFromFile();
         });
         break;
     }
