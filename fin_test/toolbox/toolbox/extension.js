@@ -375,12 +375,12 @@ async function handleBackendResponseFromData(data) {
   console.log(data);
   console.log("HERE IS THE RESPONSE");
   console.log(data.response);
-  console.log("HERE IS THE MESSAGE");
-  console.log(data.response.message);
-  console.log("HERE IS THE CONTENT");
-  console.log(data.response.message.content);
-  console.log("HERE IS THE CODE");
-  console.log(data.code);
+  // console.log("HERE IS THE MESSAGE");
+  // console.log(data.response.message);
+  // console.log("HERE IS THE CONTENT");
+  // console.log(data.response.message.content);
+  // console.log("HERE IS THE CODE");
+  // console.log(data.code);
 
   // // Parse the backend JSON response
   // let backendResponse;
@@ -392,21 +392,21 @@ async function handleBackendResponseFromData(data) {
   // }
 
   // Ensure the structure exists before accessing the code
-  if (data && data.response && data.response.message.content) {
-    if (data.response.message.content.code) {
-      console.log("Code exists:", data.response.message.content.code);
+  if (data && data.response && data.response.code) {
+    // if (data.response.code) {
+    //   console.log("Code exists:", data.response.code);
 
-      try {
-        const entries = Object.entries(data.response.message.content.code);
-        console.log("Entries:", entries);
-      } catch (error) {
-        console.error("Error processing code:", error);
-      }
-    } else {
-      console.log("Code is undefined or null");
-    }
+    //   try {
+    //     const entries = Object.entries(data.response.message.content.code);
+    //     console.log("Entries:", entries);
+    //   } catch (error) {
+    //     console.error("Error processing code:", error);
+    //   }
+    // } else {
+    //   console.log("Code is undefined or null");
+    // }
 
-    const codeLines = data.response.message.content.code;
+    const codeLines = data.response.code;
 
     // Iterate over the code lines from the backend and insert them in the editor at the correct positions
     for (const [lineNumber, code] of Object.entries(codeLines)) {
