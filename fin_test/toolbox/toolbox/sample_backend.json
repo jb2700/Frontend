@@ -1,0 +1,15 @@
+{
+    "message": "Prompt success",
+    "response": {
+        "message": {
+            "content": {
+                "code" : {
+                    "1": "def transfer(self, amount, recipient_account):",
+                    "2": "if 0 < amount <= self.balance",
+                    "3": "a = 7"
+                }
+
+            }
+        }
+    }
+}

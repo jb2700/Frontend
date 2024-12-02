@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Microphone Recording</title>
+</head>
+<body>
+  <h1>Microphone Recording</h1>
+  <button id="startButton">Start Recording</button>
+  <button id="stopButton" style="display:none;">Stop Recording</button>
+
+  <script>
+    let mediaRecorder;
+    let audioChunks = [];
+    let mediaStream;
+    let isRecording = false;
+
+    // Request microphone access
+    async function requestMicrophoneAccess() {
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log("Microphone access granted");
+      } catch (error) {
+        console.error("Microphone access denied", error);
+        alert("Microphone access denied. Please enable it.");
+      }
+    }
+
+    // Start recording function
+    function startRecording() {
+      if (!mediaStream) {
+        console.log("No media stream available");
+        return;
+      }
+
+      mediaRecorder = new MediaRecorder(mediaStream);
+      mediaRecorder.ondataavailable = (event) => {
+        audioChunks.push(event.data);
+      };
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        console.log('Recording stopped. Audio URL:', audioUrl);
+      };
+      mediaRecorder.start();
+      isRecording = true;
+      console.log("Recording started");
+    }
+
+    // Stop recording function
+    function stopRecording() {
+      if (mediaRecorder && isRecording) {
+        mediaRecorder.stop();
+        mediaStream.getTracks().forEach(track => track.stop());
+        isRecording = false;
+        console.log("Recording stopped");
+      }
+    }
+
+    // Start/Stop button event listeners
+    document.getElementById("startButton").addEventListener("click", () => {
+      document.getElementById("startButton").style.display = "none";
+      document.getElementById("stopButton").style.display = "block";
+      startRecording();
+    });
+
+    document.getElementById("stopButton").addEventListener("click", () => {
+      document.getElementById("stopButton").style.display = "none";
+      document.getElementById("startButton").style.display = "block";
+      stopRecording();
+    });
+
+    // Request microphone access on page load
+    requestMicrophoneAccess();
+  </script>
+</body>
+</html>
