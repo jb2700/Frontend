@@ -8,10 +8,10 @@ const path = require("path");
 const bodyParser = require("body-parser");
 const WebSocket = require("ws");
 const app = express();
-const resampler = require("audio-resampler");
+// const resampler = require("audio-resampler");
 const port = 4001;
 // const pcm = require("pcm");
-const AudioBufferUtils = require("audio-buffer-utils");
+// const AudioBufferUtils = require("audio-buffer-utils");
 
 const fs = require("fs");
 const { exec } = require("child_process");
@@ -103,10 +103,10 @@ function convertRawTo16bitPCM(data) {
 
 function startRecordingnew() {
   const outputFilePath = path.join(__dirname, "audio", "recording.wav");
-
+  console.log("I AM IN THE START RECORING NEW");
   // Start recording with sox, piping the output to stdout
   const sox = exec(
-    `sox -d -r 16000 -c 1 -b 16 -t raw rate 16000`, // Command to stream audio to stdout
+    `sox -d -r 16000 -c 1 -b 16 -t raw - rate 16000`, // Command to stream audio to stdout
     (error, stdout, stderr) => {
       if (error) {
         console.error(`Error starting recording: ${error.message}`);
@@ -121,45 +121,41 @@ function startRecordingnew() {
   );
   // Set up a stream to capture audio data as it comes out of sox stdout
   sox.stdout.on("data", (data) => {
+    console.log("HERE IS THE DATA");
+    console.log(data);
     // Convert the raw data to 16-bit PCM at 16000Hz
     if (socket.readyState === WebSocket.OPEN) {
       const sampleRate = 16000;
 
       // Resample the audio from 48000Hz to 16000Hz using audio-resampler
-      resampler
-        .resample(data, 48000, sampleRate)
-        .then((resampledData) => {
-          // Convert the resampled data to 16-bit PCM
-          const outputData = convertRawTo16bitPCM(resampledData);
 
-          // Create the metadata and combine it with audio data
-          const metadata = JSON.stringify({ sampleRate: sampleRate });
-          const metadataBytes = new TextEncoder().encode(metadata);
+        // Convert the resampled data to 16-bit PCM
+        // const outputData = convertRawTo16bitPCM(data);
 
-          // 4-byte integer indicating the length of the metadata
-          const metadataLength = new ArrayBuffer(4);
-          const metadataLengthView = new DataView(metadataLength);
-          metadataLengthView.setInt32(0, metadataBytes.byteLength, true); // Little-endian
+        // Create the metadata and combine it with audio data
+        const metadata = JSON.stringify({ sampleRate: sampleRate });
+        const metadataBytes = new TextEncoder().encode(metadata);
 
-          const metadataLengthBuffer = Buffer.from(metadataLength);
-          const metadataBytesBuffer = Buffer.from(metadataBytes);
-          const audioDataBuffer = Buffer.from(outputData);
+        // 4-byte integer indicating the length of the metadata
+        const metadataLength = new ArrayBuffer(4);
+        const metadataLengthView = new DataView(metadataLength);
+        metadataLengthView.setInt32(0, metadataBytes.byteLength, true); // Little-endian
 
-          // Combine metadata, metadata length, and audio data
-          const combinedData = Buffer.concat([
-            metadataLengthBuffer,
-            metadataBytesBuffer,
-            audioDataBuffer,
-          ]);
+        const metadataLengthBuffer = Buffer.from(metadataLength);
+        const metadataBytesBuffer = Buffer.from(metadataBytes);
+        const audioDataBuffer = Buffer.from(data);
 
-          console.log(`Audio data size: ${combinedData.length} bytes`);
+        // Combine metadata, metadata length, and audio data
+        const combinedData = Buffer.concat([
+          metadataLengthBuffer,
+          metadataBytesBuffer,
+          audioDataBuffer,
+        ]);
 
-          // Send the combined data as a binary message to the WebSocket server
-          socket.send(combinedData);
-        })
-        .catch((err) => {
-          console.error("Error resampling audio:", err);
-        });
+        console.log(`Audio data size: ${combinedData.length} bytes`);
+
+        // Send the combined data as a binary message to the WebSocket server
+        socket.send(combinedData);
     }
   });
 
@@ -168,8 +164,6 @@ function startRecordingnew() {
     sox.kill(); // Stop recording when WebSocket connection is closed
   };
 
-  // Handle WebSocket connection
-  // socket = new WebSocket("ws://142.112.54.19:43102");
 }
 
 // Start recording process
