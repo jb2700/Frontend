@@ -414,7 +414,18 @@ async function handleBackendResponseFromData(data) {
       console.log(lineNumber);
 
       // Convert lineNumber to an integer for correct position
-      const position = getEditorPositionForLine(Number(lineNumber));
+      const position = getEditorPositionForLine(lineNumber);
+      console.log("HREE IS THE INPUTTED POSITION");
+      console.log(position);
+      // const line_end = opened_editor.document.lineCount;
+
+      while (lineNumber > opened_editor.document.lineCount) {
+        await insertCodeAtPosition(
+          opened_editor,
+          getEditorPositionForLine(opened_editor.document.lineCount),
+          "\n"
+        );
+      }
 
       // Insert the code at the correct position
       await insertCodeAtPosition(opened_editor, position, code); // Await to ensure sequential execution
@@ -458,10 +469,12 @@ function handleBackendResponseFromFile() {
         console.log(lineNumber);
 
         // Convert lineNumber to an integer for correct position
-        const position = getEditorPositionForLine(Number(lineNumber));
+        const position = getEditorPositionForLine(lineNumber);
+        console.log("POSITION RETURNED FROM VSCODE");
+        console.log(position);
 
         // Insert the code at the correct position
-        await insertCodeAtPosition(opened_editor, position, code); // Await to ensure sequential execution
+        await insertCodeAtPosition(opened_editor, position, code + '\n'); // Await to ensure sequential execution
       }
     } else {
       console.error("No code found in the backend response.");
