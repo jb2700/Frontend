@@ -192,7 +192,7 @@ function convertRawTo16bitPCM(data) {
 // }
 
 function startRecordingnew() {
-  console.log("I AM IN THE START RECORING NEW");
+  // console.log("I AM IN THE START RECORING NEW");
 
   // Start recording with sox, piping the output to stdout
   const sox = exec(
@@ -267,10 +267,11 @@ function startRecordingnew() {
           audioDataBuffer,
         ]);
 
-        console.log(`Sending chunk of size: ${combinedData.length} bytes`);
+        // console.log(`Sending chunk of size: ${combinedData.length} bytes`);
 
         // Send the combined data (metadata + audio) over WebSocket
         socket.send(combinedData);
+        return;
       }
     }
   });
@@ -418,44 +419,44 @@ async function send_to_backend() {
       userid: "generated_from_github",
       conversationid: id,
       prompt:
-        "Write a fun and cool calculator",
+        "Write a basic calculator function starting from line 1",
     };
-await fetch("http://142.112.54.19:43186/prompt", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify(new_pay),
-})
-  .then((response) => {
-    // Check if the response is OK (status code 200-299)
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
-    }
+  await fetch("http://142.112.54.19:43186/prompt", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(new_pay),
+  })
+    .then((response) => {
+      // Check if the response is OK (status code 200-299)
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
 
-    // Check if the content type is JSON
-    const contentType = response.headers.get("Content-Type");
-    if (contentType && contentType.includes("application/json")) {
-      return response.json(); // Parse the JSON response
-    } else {
-      return response.text(); // If it's not JSON, log the raw text
-    }
-  })
-  .then((data) => {
-    if (typeof data === "string") {
-      // If data is a string (likely HTML), log the raw response
-      console.log("Received non-JSON response:", data);
-    } else {
-      // Handle the JSON response data
-      console.log("Received JSON data:", data);
-      handleBackendResponseFromData(data);
-    }
-  })
-  .catch((error) => {
-    // Handle any errors
-    console.error("Error:", error);
-  });
-}
+      // Check if the content type is JSON
+      const contentType = response.headers.get("Content-Type");
+      if (contentType && contentType.includes("application/json")) {
+        return response.json(); // Parse the JSON response
+      } else {
+        return response.text(); // If it's not JSON, log the raw text
+      }
+    })
+    .then((data) => {
+      if (typeof data === "string") {
+        // If data is a string (likely HTML), log the raw response
+        console.log("Received non-JSON response:", data);
+      } else {
+        // Handle the JSON response data
+        console.log("Received JSON data:", data);
+        handleBackendResponseFromData(data);
+      }
+    })
+    .catch((error) => {
+      // Handle any errors
+      console.error("Error:", error);
+    });
+  }
 }
 
 // This method is called when your extension is activated
@@ -534,53 +535,6 @@ async function handleBackendResponseFromData(data) {
   } else {
     console.error("No code found in the backend response.");
   }
-}
-
-// async -> IP: 142.112.54.19:43186
-function handleBackendResponseFromFile() {
-  const filePath = path.join(__dirname, "sample_backend.json");
-
-  // Read the backend response from the file
-  fs.readFile(filePath, "utf8", async (err, data) => {
-    if (err) {
-      console.error("Error reading backend response file:", err);
-      return;
-    }
-
-    // Parse the backend JSON response
-    let backendResponse;
-    try {
-      backendResponse = JSON.parse(data);
-    } catch (parseErr) {
-      console.error("Error parsing backend response JSON:", parseErr);
-      return;
-    }
-
-    // Ensure the structure exists before accessing the code
-    if (
-      backendResponse &&
-      backendResponse.response &&
-      backendResponse.response.message.content.code
-    ) {
-      const codeLines = backendResponse.response.message.content.code;
-
-      // Iterate over the code lines from the backend and insert them in the editor at the correct positions
-      for (const [lineNumber, code] of Object.entries(codeLines)) {
-        console.log("here is the line number");
-        console.log(lineNumber);
-
-        // Convert lineNumber to an integer for correct position
-        const position = getEditorPositionForLine(lineNumber);
-        console.log("POSITION RETURNED FROM VSCODE");
-        console.log(position);
-
-        // Insert the code at the correct position
-        await insertCodeAtPosition(opened_editor, position, code + '\n'); // Await to ensure sequential execution
-      }
-    } else {
-      console.error("No code found in the backend response.");
-    }
-  });
 }
 
 // this function 100% works
@@ -865,3 +819,53 @@ module.exports = {
   activate,
   deactivate,
 };
+
+
+
+
+// // async -> IP: 142.112.54.19:43186
+// function handleBackendResponseFromFile() {
+//   const filePath = path.join(__dirname, "sample_backend.json");
+
+//   // Read the backend response from the file
+//   fs.readFile(filePath, "utf8", async (err, data) => {
+//     if (err) {
+//       console.error("Error reading backend response file:", err);
+//       return;
+//     }
+
+//     // Parse the backend JSON response
+//     let backendResponse;
+//     try {
+//       backendResponse = JSON.parse(data);
+//     } catch (parseErr) {
+//       console.error("Error parsing backend response JSON:", parseErr);
+//       return;
+//     }
+
+//     // Ensure the structure exists before accessing the code
+//     if (
+//       backendResponse &&
+//       backendResponse.response &&
+//       backendResponse.response.message.content.code
+//     ) {
+//       const codeLines = backendResponse.response.message.content.code;
+
+//       // Iterate over the code lines from the backend and insert them in the editor at the correct positions
+//       for (const [lineNumber, code] of Object.entries(codeLines)) {
+//         console.log("here is the line number");
+//         console.log(lineNumber);
+
+//         // Convert lineNumber to an integer for correct position
+//         const position = getEditorPositionForLine(lineNumber);
+//         console.log("POSITION RETURNED FROM VSCODE");
+//         console.log(position);
+
+//         // Insert the code at the correct position
+//         await insertCodeAtPosition(opened_editor, position, code + '\n'); // Await to ensure sequential execution
+//       }
+//     } else {
+//       console.error("No code found in the backend response.");
+//     }
+//   });
+// }
