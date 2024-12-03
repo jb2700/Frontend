@@ -69,7 +69,7 @@ server.on("upgrade", (request, socket, head) => {
   });
 });
 
-let socket = new WebSocket("ws://142.112.54.19:43102");
+let socket = new WebSocket("ws://71.241.245.11:41106");
 
 socket.onopen = () => {
   console.log("WebSocket connected. Sending audio stream...");
@@ -101,12 +101,103 @@ function convertRawTo16bitPCM(data) {
   return outputData.buffer; // Return raw 16-bit PCM data as ArrayBuffer
 }
 
+// function startRecordingnew() {
+//   console.log("I AM IN THE START RECORING NEW");
+
+//   // Start recording with sox, piping the output to stdout
+//   const sox = exec(
+//     `sox -d -r 48000 -c 1 -b 32 -t raw -`, // Stream raw 32-bit PCM
+//     { encoding: "buffer" }, // Ensures we get the output as a raw Buffer
+//     (error, stdout, stderr) => {
+//       if (error) {
+//         console.error(`Error starting recording: ${error.message}`);
+//         return;
+//       }
+//       if (stderr) {
+//         console.error(`stderr: ${stderr}`);
+//         return;
+//       }
+//       console.log(`stdout: ${stdout}`);
+//     }
+//   );
+
+//   let audioBuffer = Buffer.alloc(0); // Start with an empty buffer
+
+//   sox.stdout.on("data", (data) => {
+//     // console.log("Received new chunk of data from sox");
+
+//     // Append the incoming data to the buffer
+//     audioBuffer = Buffer.concat([audioBuffer, data]);
+
+//     // Check if WebSocket is open
+//     if (socket.readyState === WebSocket.OPEN) {
+//       // console.log("SOCKET IS READY");
+
+//       const CHUNK_SIZE = 536; // Target chunk size in bytes
+
+//       // While we have more data in the buffer, send it in chunks of 536 bytes
+//       while (audioBuffer.length >= CHUNK_SIZE) {
+//         // Extract a chunk of the specified size (536 bytes)
+//         const chunk = audioBuffer.slice(0, CHUNK_SIZE);
+
+//         // Remove the chunk from the buffer (advance buffer start)
+//         audioBuffer = audioBuffer.slice(CHUNK_SIZE);
+
+//         // Convert the raw 32-bit PCM data in 'chunk' to 16-bit PCM
+//         let inputData = new Int32Array(chunk.buffer); // Assuming the data is raw 32-bit PCM
+//         let outputData = new Int16Array(inputData.length);
+
+//         // Convert the 32-bit PCM to 16-bit PCM (clipping if necessary)
+//         for (let i = 0; i < inputData.length; i++) {
+//           outputData[i] = Math.max(
+//             -32768,
+//             Math.min(32767, inputData[i] * 32768)
+//           ); // Clip to 16-bit range
+//         }
+
+//         // Create metadata with sample rate
+//         let metadata = JSON.stringify({ sampleRate: 48000 });
+//         let metadataBytes = new TextEncoder().encode(metadata);
+
+//         // 4-byte integer indicating the length of the metadata
+//         let metadataLength = new ArrayBuffer(4);
+//         let metadataLengthView = new DataView(metadataLength);
+//         metadataLengthView.setInt32(0, metadataBytes.byteLength, true); // Little-endian
+
+//         // Combine metadata length, metadata, and audio chunk
+//         let metadataLengthBuffer = Buffer.from(metadataLength);
+//         let metadataBytesBuffer = Buffer.from(metadataBytes);
+//         let audioDataBuffer = Buffer.from(outputData.buffer); // Buffer containing 16-bit PCM audio data
+
+//         let combinedData = Buffer.concat([
+//           metadataLengthBuffer,
+//           metadataBytesBuffer,
+//           audioDataBuffer,
+//         ]);
+
+//         // console.log(`Sending chunk of size: ${combinedData.length} bytes`);
+//         // console.log("HERE IS REAL DATA");
+//         // console.log(combinedData);
+//         // Send the combined data (metadata + audio) over WebSocket
+//         socket.send(combinedData);
+//       }
+//     }
+//   });
+
+//   // Handle WebSocket closure to stop recording
+//   socket.onclose = () => {
+//     console.log("WebSocket connection closed.");
+//     sox.kill(); // Stop recording when WebSocket connection is closed
+//   };
+// }
+
 function startRecordingnew() {
-  const outputFilePath = path.join(__dirname, "audio", "recording.wav");
   console.log("I AM IN THE START RECORING NEW");
+
   // Start recording with sox, piping the output to stdout
   const sox = exec(
-    `sox -d -r 16000 -c 1 -b 16 -t raw - rate 16000`, // Command to stream audio to stdout
+    `sox -d -r 48000 -c 1 -b 32 -t raw -`, // Stream raw 32-bit PCM
+    { encoding: "buffer", maxBuffer: 1 * 1024 * 1024 }, // Max buffer size set to 1MB to prevent overflow
     (error, stdout, stderr) => {
       if (error) {
         console.error(`Error starting recording: ${error.message}`);
@@ -119,52 +210,79 @@ function startRecordingnew() {
       console.log(`stdout: ${stdout}`);
     }
   );
-  // Set up a stream to capture audio data as it comes out of sox stdout
+
+  let audioBuffer = Buffer.alloc(0); // Start with an empty buffer
+
+  // Set a rate limit for sending data to avoid flooding the WebSocket
+  const SEND_INTERVAL = 100; // 100ms delay between sending data chunks
+  const CHUNK_SIZE = 536; // 536 bytes chunk size
+
+  // Timer to control the rate of sending
+  let lastSendTime = Date.now();
+
   sox.stdout.on("data", (data) => {
-    console.log("HERE IS THE DATA");
-    console.log(data);
-    // Convert the raw data to 16-bit PCM at 16000Hz
-    if (socket.readyState === WebSocket.OPEN) {
-      const sampleRate = 16000;
+    // Append the incoming data to the buffer
+    audioBuffer = Buffer.concat([audioBuffer, data]);
 
-      // Resample the audio from 48000Hz to 16000Hz using audio-resampler
+    // Process the buffer and send 536 bytes at a time
+    while (audioBuffer.length >= CHUNK_SIZE) {
+      const now = Date.now();
 
-        // Convert the resampled data to 16-bit PCM
-        // const outputData = convertRawTo16bitPCM(data);
+      // Only proceed if enough time has passed since the last send
+      if (now - lastSendTime >= SEND_INTERVAL) {
+        lastSendTime = now; // Update the time of the last send
 
-        // Create the metadata and combine it with audio data
-        const metadata = JSON.stringify({ sampleRate: sampleRate });
-        const metadataBytes = new TextEncoder().encode(metadata);
+        // Extract a chunk of the specified size (536 bytes)
+        const chunk = audioBuffer.slice(0, CHUNK_SIZE);
+
+        // Remove the chunk from the buffer (advance buffer start)
+        audioBuffer = audioBuffer.slice(CHUNK_SIZE);
+
+        // Convert the raw 32-bit PCM data in 'chunk' to 16-bit PCM
+        let inputData = new Int32Array(chunk.buffer); // Assuming the data is raw 32-bit PCM
+        let outputData = new Int16Array(inputData.length);
+
+        // Convert the 32-bit PCM to 16-bit PCM (clipping if necessary)
+        for (let i = 0; i < inputData.length; i++) {
+          outputData[i] = Math.max(-32768, Math.min(32767, inputData[i])); // Clip to 16-bit range
+        }
+
+        // Create metadata with sample rate (this could be sent once or occasionally)
+        let metadata = JSON.stringify({ sampleRate: 48000 });
+        let metadataBytes = new TextEncoder().encode(metadata);
 
         // 4-byte integer indicating the length of the metadata
-        const metadataLength = new ArrayBuffer(4);
-        const metadataLengthView = new DataView(metadataLength);
+        let metadataLength = new ArrayBuffer(4);
+        let metadataLengthView = new DataView(metadataLength);
         metadataLengthView.setInt32(0, metadataBytes.byteLength, true); // Little-endian
 
-        const metadataLengthBuffer = Buffer.from(metadataLength);
-        const metadataBytesBuffer = Buffer.from(metadataBytes);
-        const audioDataBuffer = Buffer.from(data);
+        // Combine metadata length, metadata, and audio chunk
+        let metadataLengthBuffer = Buffer.from(metadataLength);
+        let metadataBytesBuffer = Buffer.from(metadataBytes);
+        let audioDataBuffer = Buffer.from(outputData.buffer); // Buffer containing 16-bit PCM audio data
 
-        // Combine metadata, metadata length, and audio data
-        const combinedData = Buffer.concat([
+        let combinedData = Buffer.concat([
           metadataLengthBuffer,
           metadataBytesBuffer,
           audioDataBuffer,
         ]);
 
-        console.log(`Audio data size: ${combinedData.length} bytes`);
+        console.log(`Sending chunk of size: ${combinedData.length} bytes`);
 
-        // Send the combined data as a binary message to the WebSocket server
+        // Send the combined data (metadata + audio) over WebSocket
         socket.send(combinedData);
+      }
     }
   });
 
+  // Handle WebSocket closure to stop recording
   socket.onclose = () => {
     console.log("WebSocket connection closed.");
     sox.kill(); // Stop recording when WebSocket connection is closed
   };
-
 }
+
+
 
 // Start recording process
 let recordingProcess = null;
@@ -299,29 +417,45 @@ async function send_to_backend() {
     const new_pay = {
       userid: "generated_from_github",
       conversationid: id,
-      prompt: "Write a calculator function in python",
+      prompt:
+        "Write a fun and cool calculator",
     };
+await fetch("http://142.112.54.19:43186/prompt", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify(new_pay),
+})
+  .then((response) => {
+    // Check if the response is OK (status code 200-299)
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status}`);
+    }
 
-    await fetch("http://142.112.54.19:43186/prompt", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(new_pay),
-    })
-      .then((response) => response.json())
-      .then((data) => {
-        // Handle the response data
-        console.log(data);
-        handleBackendResponseFromData(data);
-      })
-      .catch((error) => {
-        // Handle any errors
-        console.error("Error:", error);
-      });
-  } else {
-    console.log("No editor is open or active.");
-  }
+    // Check if the content type is JSON
+    const contentType = response.headers.get("Content-Type");
+    if (contentType && contentType.includes("application/json")) {
+      return response.json(); // Parse the JSON response
+    } else {
+      return response.text(); // If it's not JSON, log the raw text
+    }
+  })
+  .then((data) => {
+    if (typeof data === "string") {
+      // If data is a string (likely HTML), log the raw response
+      console.log("Received non-JSON response:", data);
+    } else {
+      // Handle the JSON response data
+      console.log("Received JSON data:", data);
+      handleBackendResponseFromData(data);
+    }
+  })
+  .catch((error) => {
+    // Handle any errors
+    console.error("Error:", error);
+  });
+}
 }
 
 // This method is called when your extension is activated
@@ -371,53 +505,21 @@ function getEditorPositionForLine(lineNumber) {
 }
 
 async function handleBackendResponseFromData(data) {
-  console.log("HERE IS THE DATA");
-  console.log(data);
   console.log("HERE IS THE RESPONSE");
   console.log(data.response);
-  // console.log("HERE IS THE MESSAGE");
-  // console.log(data.response.message);
-  // console.log("HERE IS THE CONTENT");
-  // console.log(data.response.message.content);
-  // console.log("HERE IS THE CODE");
-  // console.log(data.code);
 
-  // // Parse the backend JSON response
-  // let backendResponse;
-  // try {
-  //   backendResponse = JSON.parse(data);
-  // } catch (parseErr) {
-  //   console.error("Error parsing backend response JSON:", parseErr);
-  //   return;
-  // }
 
   // Ensure the structure exists before accessing the code
   if (data && data.response && data.response.code) {
-    // if (data.response.code) {
-    //   console.log("Code exists:", data.response.code);
-
-    //   try {
-    //     const entries = Object.entries(data.response.message.content.code);
-    //     console.log("Entries:", entries);
-    //   } catch (error) {
-    //     console.error("Error processing code:", error);
-    //   }
-    // } else {
-    //   console.log("Code is undefined or null");
-    // }
 
     const codeLines = data.response.code;
 
-    // Iterate over the code lines from the backend and insert them in the editor at the correct positions
     for (const [lineNumber, code] of Object.entries(codeLines)) {
       console.log("here is the line number");
       console.log(lineNumber);
-
-      // Convert lineNumber to an integer for correct position
+ 
       const position = getEditorPositionForLine(lineNumber);
-      console.log("HREE IS THE INPUTTED POSITION");
-      console.log(position);
-      // const line_end = opened_editor.document.lineCount;
+
 
       while (lineNumber > opened_editor.document.lineCount) {
         await insertCodeAtPosition(
@@ -426,9 +528,8 @@ async function handleBackendResponseFromData(data) {
           "\n"
         );
       }
-
-      // Insert the code at the correct position
-      await insertCodeAtPosition(opened_editor, position, code); // Await to ensure sequential execution
+      console.log("BEFORE INSERT CODE");
+      await insertCodeAtPosition(opened_editor, position, code);
     }
   } else {
     console.error("No code found in the backend response.");
@@ -484,19 +585,17 @@ function handleBackendResponseFromFile() {
 
 // this function 100% works
 async function insertCodeAtPosition(editor, position, code) {
-  console.log("inside the insert code at position");
-  console.log(editor);
-  console.log("position");
-  console.log(position);
-  console.log("code here");
-  console.log(code);
 
   try {
+    console.log("POSITION HERE");
+    console.log(position);
+    console.log("CODE HERE");
+    console.log(code);
+
     const success = await editor.edit((editBuilder) => {
       // Insert the code at the specified position
       editBuilder.insert(position, code); // Insert code at the specified position with a newline
     });
-
     if (success) {
       console.log("Code inserted successfully!");
     } else {
