@@ -645,16 +645,16 @@ function convertImageToBase64(imagePath) {
 
 function getWebviewContent() {
   const playImageBase64 = convertImageToBase64(
-    path.join(__dirname, "images", "mic.jpg")
+    path.join(__dirname, "images", "micn.jpeg")
   );
   const stopImageBase64 = convertImageToBase64(
-    path.join(__dirname, "images", "stop.png")
+    path.join(__dirname, "images", "stopn.jpeg")
   );
   const checkImageBase64 = convertImageToBase64(
-    path.join(__dirname, "images", "check.png")
+    path.join(__dirname, "images", "checkn.jpeg")
   );
   const xImageBase64 = convertImageToBase64(
-    path.join(__dirname, "images", "x.jpg")
+    path.join(__dirname, "images", "xn.jpeg")
   );
 
   return `
