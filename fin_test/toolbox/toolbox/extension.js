@@ -85,22 +85,6 @@ socket.onerror = (error) => {
   console.error("WebSocket error:", error.message);
 };
 
-function convertRawTo16bitPCM(data) {
-  // We assume `data` is an ArrayBuffer containing 32-bit PCM data.
-  const length = data.byteLength / 4; // 4 bytes per 32-bit sample
-  const outputData = new Int16Array(length);
-
-  const view = new DataView(data);
-  for (let i = 0; i < length; i++) {
-    // Read 32-bit signed integer (4 bytes)
-    const sample = view.getInt32(i * 4, true); // Little-endian
-    // Clamp to the 16-bit range (-32768 to 32767)
-    outputData[i] = Math.max(-32768, Math.min(32767, sample));
-  }
-
-  return outputData.buffer; // Return raw 16-bit PCM data as ArrayBuffer
-}
-
 // function startRecordingnew() {
 //   console.log("I AM IN THE START RECORING NEW");
 
@@ -214,8 +198,8 @@ function startRecordingnew() {
   let audioBuffer = Buffer.alloc(0); // Start with an empty buffer
 
   // Set a rate limit for sending data to avoid flooding the WebSocket
-  const SEND_INTERVAL = 100; // 100ms delay between sending data chunks
-  const CHUNK_SIZE = 536; // 536 bytes chunk size
+  const SEND_INTERVAL = 150; // 200ms delay between sending data chunks
+  const CHUNK_SIZE = 1024; // 1024 bytes chunk size
 
   // Timer to control the rate of sending
   let lastSendTime = Date.now();
@@ -225,53 +209,77 @@ function startRecordingnew() {
     audioBuffer = Buffer.concat([audioBuffer, data]);
 
     // Process the buffer and send 536 bytes at a time
-    while (audioBuffer.length >= CHUNK_SIZE) {
-      const now = Date.now();
+    if (socket.readyState === WebSocket.OPEN) {
+      while (audioBuffer.length >= CHUNK_SIZE) {
+        const now = Date.now();
 
-      // Only proceed if enough time has passed since the last send
-      if (now - lastSendTime >= SEND_INTERVAL) {
-        lastSendTime = now; // Update the time of the last send
+        // Only proceed if enough time has passed since the last send
+        if (now - lastSendTime >= SEND_INTERVAL) {
+          lastSendTime = now; // Update the time of the last send
 
-        // Extract a chunk of the specified size (536 bytes)
-        const chunk = audioBuffer.slice(0, CHUNK_SIZE);
+          let uint8Array = new Uint8Array(audioBuffer.buffer);
 
-        // Remove the chunk from the buffer (advance buffer start)
-        audioBuffer = audioBuffer.slice(CHUNK_SIZE);
+          // Extract a chunk of the specified size (536 bytes)
+          const chunk = uint8Array.slice(0, CHUNK_SIZE);
 
-        // Convert the raw 32-bit PCM data in 'chunk' to 16-bit PCM
-        let inputData = new Int32Array(chunk.buffer); // Assuming the data is raw 32-bit PCM
-        let outputData = new Int16Array(inputData.length);
+          // Remove the chunk from the buffer (advance buffer start)
+          audioBuffer = Buffer.from(uint8Array.slice(CHUNK_SIZE));
 
-        // Convert the 32-bit PCM to 16-bit PCM (clipping if necessary)
-        for (let i = 0; i < inputData.length; i++) {
-          outputData[i] = Math.max(-32768, Math.min(32767, inputData[i])); // Clip to 16-bit range
+          // Convert the raw 32-bit PCM data in 'chunk' to 16-bit PCM
+          let inputData = new Int32Array(chunk.buffer); // Assuming the data is raw 32-bit PCM
+          // console.log("THIS IS THE INPUT DATA");
+          // console.log(inputData);
+          let outputData = new Int16Array(inputData.length);
+
+          for (let i = 0; i < inputData.length; i++) {
+            let value = inputData[i]; // Value from the 32-bit input data
+
+            // Normalize the value from 32-bit range (-2147483648 to 2147483647) to 16-bit range (-32768 to 32767)
+            // Scale the value from the range -2147483648 -> 2147483647 to the range -32768 -> 32767
+            let scaledValue = (value / 2147483647) * 32767;
+
+            // Convert to an integer (round) to fit the 16-bit PCM format
+            outputData[i] = Math.round(scaledValue);
+
+            // Clip to the 16-bit range (-32768 to 32767) in case of rounding errors
+            outputData[i] = Math.max(-32768, Math.min(32767, outputData[i]));
+          }
+
+
+          // Create metadata with sample rate (this could be sent once or occasionally)
+          let metadata = JSON.stringify({ sampleRate: 48000 });
+          let metadataBytes = new TextEncoder().encode(metadata);
+
+          // 4-byte integer indicating the length of the metadata
+          let metadataLength = new ArrayBuffer(4);
+          let metadataLengthView = new DataView(metadataLength);
+          metadataLengthView.setInt32(0, metadataBytes.byteLength, true); // Little-endian
+
+          // Combine metadata length, metadata, and audio chunk
+          let metadataLengthBuffer = Buffer.from(metadataLength);
+          let metadataBytesBuffer = Buffer.from(metadataBytes);
+          let audioDataBuffer = Buffer.from(outputData.buffer); // Buffer containing 16-bit PCM audio data
+
+          let combinedData = Buffer.concat([
+            metadataLengthBuffer,
+            metadataBytesBuffer,
+            audioDataBuffer,
+          ]);
+
+          // console.log(`Sending chunk of size: ${combinedData.length} bytes`);
+          // console.log("here is the chunk:");
+          // console.log(combinedData);
+          // console.log("Here is the meta data length buffer");
+          // console.log(metadataLengthBuffer);
+          // console.log("Here is the meta data bytes buffer");
+          // console.log(metadataBytesBuffer);
+          // console.log("here is the audio data buffer");
+          // console.log(audioDataBuffer);
+
+          // Send the combined data (metadata + audio) over WebSocket
+          socket.send(combinedData);
+          return;
         }
-
-        // Create metadata with sample rate (this could be sent once or occasionally)
-        let metadata = JSON.stringify({ sampleRate: 48000 });
-        let metadataBytes = new TextEncoder().encode(metadata);
-
-        // 4-byte integer indicating the length of the metadata
-        let metadataLength = new ArrayBuffer(4);
-        let metadataLengthView = new DataView(metadataLength);
-        metadataLengthView.setInt32(0, metadataBytes.byteLength, true); // Little-endian
-
-        // Combine metadata length, metadata, and audio chunk
-        let metadataLengthBuffer = Buffer.from(metadataLength);
-        let metadataBytesBuffer = Buffer.from(metadataBytes);
-        let audioDataBuffer = Buffer.from(outputData.buffer); // Buffer containing 16-bit PCM audio data
-
-        let combinedData = Buffer.concat([
-          metadataLengthBuffer,
-          metadataBytesBuffer,
-          audioDataBuffer,
-        ]);
-
-        // console.log(`Sending chunk of size: ${combinedData.length} bytes`);
-
-        // Send the combined data (metadata + audio) over WebSocket
-        socket.send(combinedData);
-        return;
       }
     }
   });
@@ -282,8 +290,6 @@ function startRecordingnew() {
     sox.kill(); // Stop recording when WebSocket connection is closed
   };
 }
-
-
 
 // Start recording process
 let recordingProcess = null;
@@ -418,44 +424,43 @@ async function send_to_backend() {
     const new_pay = {
       userid: "generated_from_github",
       conversationid: id,
-      prompt:
-        "Write a basic calculator function starting from line 1",
+      prompt: "Write a basic calculator function starting from line 1",
     };
-  await fetch("http://142.112.54.19:43186/prompt", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(new_pay),
-  })
-    .then((response) => {
-      // Check if the response is OK (status code 200-299)
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
-      }
+    await fetch("http://142.112.54.19:43186/prompt", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(new_pay),
+    })
+      .then((response) => {
+        // Check if the response is OK (status code 200-299)
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
 
-      // Check if the content type is JSON
-      const contentType = response.headers.get("Content-Type");
-      if (contentType && contentType.includes("application/json")) {
-        return response.json(); // Parse the JSON response
-      } else {
-        return response.text(); // If it's not JSON, log the raw text
-      }
-    })
-    .then((data) => {
-      if (typeof data === "string") {
-        // If data is a string (likely HTML), log the raw response
-        console.log("Received non-JSON response:", data);
-      } else {
-        // Handle the JSON response data
-        console.log("Received JSON data:", data);
-        handleBackendResponseFromData(data);
-      }
-    })
-    .catch((error) => {
-      // Handle any errors
-      console.error("Error:", error);
-    });
+        // Check if the content type is JSON
+        const contentType = response.headers.get("Content-Type");
+        if (contentType && contentType.includes("application/json")) {
+          return response.json(); // Parse the JSON response
+        } else {
+          return response.text(); // If it's not JSON, log the raw text
+        }
+      })
+      .then((data) => {
+        if (typeof data === "string") {
+          // If data is a string (likely HTML), log the raw response
+          console.log("Received non-JSON response:", data);
+        } else {
+          // Handle the JSON response data
+          console.log("Received JSON data:", data);
+          handleBackendResponseFromData(data);
+        }
+      })
+      .catch((error) => {
+        // Handle any errors
+        console.error("Error:", error);
+      });
   }
 }
 
@@ -509,18 +514,15 @@ async function handleBackendResponseFromData(data) {
   console.log("HERE IS THE RESPONSE");
   console.log(data.response);
 
-
   // Ensure the structure exists before accessing the code
   if (data && data.response && data.response.code) {
-
     const codeLines = data.response.code;
 
     for (const [lineNumber, code] of Object.entries(codeLines)) {
       console.log("here is the line number");
       console.log(lineNumber);
- 
-      const position = getEditorPositionForLine(lineNumber);
 
+      const position = getEditorPositionForLine(lineNumber);
 
       while (lineNumber > opened_editor.document.lineCount) {
         await insertCodeAtPosition(
@@ -539,7 +541,6 @@ async function handleBackendResponseFromData(data) {
 
 // this function 100% works
 async function insertCodeAtPosition(editor, position, code) {
-
   try {
     console.log("POSITION HERE");
     console.log(position);
@@ -692,7 +693,78 @@ function getWebviewContent() {
       flex-direction: row; 
       justify-content: center;
       width: 100%;
+      padding-top: 300px;
       margin-top: auto; 
+    }
+
+    /* Each button in the row */
+    .button-container img {
+      width: 35px;
+      height: 35px;
+      margin: 10px;
+      cursor: pointer;
+    }
+
+    .button-container img:hover {
+      opacity: 0.8;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+
+To meet your requirements, let's address each of your points one by one:
+
+Text Area Background Color Matching VSCode Background:
+To match the background color of your <textarea> to the default VSCode background, we need to know the color used in VSCode's dark theme. The color is usually #1e1e1e. If you're using the light theme, it would typically be #ffffff, but I'll assume you're looking for the dark theme background color for now. We will apply this color to the textarea's background.
+
+Text Color White:
+To make the text inside the <textarea> white, we'll set the text color to #ffffff.
+
+Text Area Above the Buttons:
+To position the <textarea> above the buttons, we need to adjust the layout. In your current setup, the button container is styled to be placed at the bottom of the screen (padding-top: 300px; and margin-top: auto;). We can adjust this to place the <textarea> above it while maintaining proper spacing.
+
+Here is the modified code:
+
+html
+Copy code
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recording Sidebar</title>
+  
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      margin: 0;
+      height: 100%; 
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+    }
+
+    h1 {
+      font-size: 24px;
+      margin-bottom: 10px;
+    }
+
+    p {
+      color: #666;
+      font-size: 14px;
+    }
+
+    /* Main container for buttons */
+    .button-container {
+      display: flex;
+      flex-direction: row; 
+      justify-content: center;
+      width: 100%;
+      padding-top: 20px;  /* Reduce space from top to make room for textarea */
+      margin-top: auto;   /* Push buttons towards the bottom */
     }
 
     /* Each button in the row */
@@ -716,15 +788,20 @@ function getWebviewContent() {
       width: 100%;
       padding: 10px;
       font-size: 14px;
-      border: 2px solid #ccc;
+      border: none;
+      justify-content: center;
+      align-items: center;
       border-radius: 5px;
-      display: none;
-      margin-bottom: 20px; /* Adds space below the textarea */
+      background-color: #1e1e1e; /* VSCode background color */
+      color: #ffffff; /* White text */
+      display: block;
+      margin-bottom: 100px; /* Adds space below the textarea */
+      resize: none; /* Disable resizing */
     }
 
     #functionText:disabled {
-      background-color: #f4f4f9;
-      color: #999;
+      background-color: #1e1e1e; /* Keep background dark even when disabled */
+      color: #ffffff; /* Keep text white */
     }
 
     /* Row container for Check and X buttons */
@@ -743,6 +820,8 @@ function getWebviewContent() {
 </head>
 <body>
 
+  <textarea id="functionText" rows="4" cols="50" disabled></textarea>
+
     <div class="button-container">
       <img id="playButton" src="${playImageBase64}" alt="Play Button">
       <img id="stopButton" class="hidden" src="${stopImageBase64}" alt="Stop Button">
@@ -750,7 +829,7 @@ function getWebviewContent() {
       <img id="xButton" class="hidden" src="${xImageBase64}" alt="X Button">
     </div>
 
-    <textarea id="functionText" rows="4" cols="50" disabled>Write a Hello World function for me</textarea>
+    
 
 
   <script>
@@ -819,9 +898,6 @@ module.exports = {
   activate,
   deactivate,
 };
-
-
-
 
 // // async -> IP: 142.112.54.19:43186
 // function handleBackendResponseFromFile() {
