@@ -301,12 +301,12 @@ function startRecordingnew() {
             audioDataBuffer.writeInt16LE(outputData[i], i * 2); // Write little-endian 16-bit value
           }
 
-          console.log("here is the audio data bytes");
-          console.log(audioDataBuffer);
-          console.log("here is the output data");
-          console.log(outputData);
-          console.log("here is the meta data length buffer");
-          console.log(metadataLengthBuffer);
+          // console.log("here is the audio data bytes");
+          // console.log(audioDataBuffer);
+          // console.log("here is the output data");
+          // console.log(outputData);
+          // console.log("here is the meta data length buffer");
+          // console.log(metadataLengthBuffer);
 
           // Combine metadata length, metadata, and audio data buffers
           let combinedData2 = Buffer.concat([
@@ -314,85 +314,13 @@ function startRecordingnew() {
             metadataBytesBuffer,
             audioDataBuffer,
           ]);
-
-          // let new_bff = new ArrayBuffer(outputData.length * 2);
-
-          // // let arrayBuffer = convertToArrayBuffer(outputData);
-
-          // let totalLength = outputData.length + metadataBytesBuffer.length + metadataLengthBuffer.length;
-
-          // let combinedBuffer = new ArrayBuffer(totalLength);
-
-
-
-          // let act_buff = new ArrayBuffer();
-
-          // let combinedData = Buffer.concat([
-          //   metadataLengthBuffer,
-          //   metadataBytesBuffer,
-          //   outputData.buffer,
-          // ]);
-
-          // // Send the combined data (metadata + audio) over WebSocket
+          try {
+            socket.send(combinedData2);
+            console.log("DATA SENT SSUCCESSFUULLY");
+          } catch (error) {
+            console.error("Error sending data:", error);
+          }
           // socket.send(combinedData2);
-          // return;
-          // let metadataLength = metadataBytes.byteLength;
-          // let metadataLengthBuffer = new Int32Array(1); // Store the length of metadata in a 32-bit integer
-          // metadataLengthBuffer[0] = metadataLength; // Set metadata length
-
-          // // Convert metadataBytes to Int32Array (this may not be strictly necessary, but it gives consistency)
-          // let metadataBytesBuffer = new Int32Array(metadataBytes.buffer);
-
-          // // Convert audio data (which is in Int16Array) to Int32Array
-          // let inputData2 = new Int16Array(chunk.buffer); // Original 16-bit audio data
-          // let outputData2 = new Int32Array(inputData.length); // Create an Int32Array to hold 32-bit audio data
-
-          // // Convert 16-bit to 32-bit
-          // for (let i = 0; i < inputData2.length; i++) {
-          //   outputData2[i] = inputData2[i]; // Direct copy to 32-bit array (you can scale here if needed)
-          // }
-
-          // // // Now you have the metadata length, metadata, and audio data as Int32Arrays
-          // // console.log("Metadata length as Int32Array:", metadataLengthBuffer);
-          // // console.log("Metadata as Int32Array:", metadataBytesBuffer);
-          // // console.log("Audio data as Int32Array:", outputData2);
-
-          // // Combine all buffers into a single ArrayBuffer
-          // let totalLength =
-          //   metadataLengthBuffer.length * Int32Array.BYTES_PER_ELEMENT +
-          //   metadataBytesBuffer.length * Int32Array.BYTES_PER_ELEMENT +
-          //   outputData2.length * Int32Array.BYTES_PER_ELEMENT;
-
-          // // Create a new ArrayBuffer to hold all data
-          // let combinedBuffer = new ArrayBuffer(totalLength);
-          // console.log("Here is the length of meta data bytes buffer");
-          // console.log(metadataBytesBuffer.length);
-
-          // // Offsets to insert data into the combined buffer
-          // let offset = 0;
-
-          // // Copy metadata length into the combined buffer
-          // new Int32Array(combinedBuffer, offset, metadataLengthBuffer.length).set(
-          //   metadataLengthBuffer
-          // );
-          // offset += metadataLengthBuffer.length * Int32Array.BYTES_PER_ELEMENT;
-
-          // // Copy metadata into the combined buffer
-          // new Int32Array(combinedBuffer, offset, metadataBytesBuffer.length).set(
-          //   metadataBytesBuffer
-          // );
-          // offset += metadataBytesBuffer.length * Int32Array.BYTES_PER_ELEMENT;
-
-          // // Copy audio data into the combined buffer
-          // new Int32Array(combinedBuffer, offset, outputData2.length).set(outputData2);
-
-          // // Send the combined data over WebSocket
-          // console.log("HERE IS FINAL BUFFER");
-          // console.log(combinedBuffer);
-          // let uint32View = new Int32Array(combinedBuffer);
-          // console.log("HERE IS THE ARRAY");
-          // console.log(uint32View);
-          socket.send(combinedData2);
 
         }
       }
