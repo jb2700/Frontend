@@ -13,6 +13,10 @@ const port = 4001;
 // const pcm = require("pcm");
 // const AudioBufferUtils = require("audio-buffer-utils");
 
+const GITHUB_CLIENT_ID = "Ov23liAHxaE1MnIsJ23V";
+const GITHUB_CLIENT_SECRET = "4551e1e83b21aa32527514e1c3495fed10c34227";
+const REDIRECT_URI = "vscode://speech2code.toolbox/callback";
+
 const fs = require("fs");
 const { exec } = require("child_process");
 
@@ -493,6 +497,44 @@ function activate(context) {
 
   trackCursorPosition();
 
+  vscode.window.registerUriHandler({
+    handleUri: async (uri) => {
+      const queryParams = new URLSearchParams(uri.query);
+      const code = queryParams.get("code");
+
+      if (code) {
+        const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({
+            client_id: GITHUB_CLIENT_ID,
+            client_secret: GITHUB_CLIENT_SECRET,
+            code: code,
+            redirect_uri: REDIRECT_URI
+          })
+        });
+
+        const tokenData = await tokenResponse.json();
+
+        if (tokenData && tokenData["access_token"]) {
+          console.log("GitHub access_token:", tokenData["access_token"]);
+          if (loginPanel) {
+            loginPanel.dispose();
+            loginPanel = null;
+          }
+          openSidebar();
+        } else {
+          console.error("Failed to get access_token", tokenData);
+        }
+      } else {
+        console.error("No code parameter found in URI");
+      }
+    }
+  });
+
   // The command has been defined in the package.json file
   // Now provide the implementation of the command with  registerCommand
   // The commandId parameter must match the command field in package.json
@@ -501,7 +543,9 @@ function activate(context) {
     function () {
       vscode.window.showInformationMessage("Hello World from toolbox!");
 
-      openSidebar();
+      // openSidebar();
+
+      openLoginView();
 
       // startRecording();
 
@@ -607,6 +651,101 @@ function trackCursorPosition() {
 }
 
 function githubauth() {}
+
+let loginPanel = null;
+
+function openLoginView() {
+  const panel = vscode.window.createWebviewPanel(
+    "githubLogin",
+    "GitHub Login",
+    vscode.ViewColumn.Beside,
+    {
+      enableScripts: true,
+      retainContextWhenHidden: true,
+    }
+  );
+
+  loginPanel = panel;
+
+  panel.webview.html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GitHub Login</title>
+  <style>
+    body { 
+      font-family: Arial, sans-serif; 
+      padding: 20px; 
+      color: #FFFFFF; 
+      background-color: #333; 
+      display: flex; 
+      align-items: center; 
+      justify-content: center; 
+      height: 100vh; 
+      margin: 0;
+    }
+    .container { 
+      max-width: 320px; 
+      width: 100%;
+      text-align: center; 
+    }
+    h1 {
+      margin-bottom: 30px;
+      color: #E0E0E0;
+      font-size: 1.8em;
+      font-weight: 400;
+    }
+    p {
+      color: #E0E0E0;
+      font-size: 1em;
+      margin-bottom: 20px;
+    }
+    .button {
+      width: 100%; 
+      padding: 10px; 
+      margin: 10px 0; 
+      background-color: rgba(255, 255, 255, 0.1); 
+      color: #E0E0E0; 
+      border: 1px solid #666; 
+      border-radius: 4px; 
+      cursor: pointer;
+      font-size: 0.9em;
+      transition: background-color 0.3s;
+    }
+    .button:hover {
+      background-color: rgba(255, 255, 255, 0.2);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>GitHub Login</h1>
+    <p>Press button below to login</p>
+    <button class="button" id="loginButton">GitHub Login</button>
+  </div>
+
+  <script>
+    const vscode = acquireVsCodeApi();
+    document.getElementById('loginButton').addEventListener('click', () => {
+      vscode.postMessage({ command: 'githubLogin' });
+    });
+  </script>
+</body>
+</html>
+`;
+
+  panel.webview.onDidReceiveMessage((message) => {
+    if (message.command === 'githubLogin') {
+      // 用户点击了GitHub登录按钮后只打开GitHub的OAuth授权页面
+      const authorizeUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=repo%20user`;
+      vscode.env.openExternal(vscode.Uri.parse(authorizeUrl));
+      // 不再此处调用 openSidebar() 或 panel.dispose()
+    }
+  });
+}
+
 
 function openSidebar() {
   const panel = vscode.window.createWebviewPanel(
