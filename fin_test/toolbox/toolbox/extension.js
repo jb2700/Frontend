@@ -3,6 +3,7 @@
 const vscode = require("vscode");
 const Microphone = require("node-microphone");
 const wav = require("wav");
+const { Worker } = require("worker_threads");
 const express = require("express");
 const path = require("path");
 const bodyParser = require("body-parser");
@@ -18,6 +19,33 @@ const { exec } = require("child_process");
 
 const wss = new WebSocket.Server({ noServer: true });
 
+let worker;
+
+try {
+  // Attempt to create a worker
+  worker = new Worker(
+    "/Users/jbeaudry/Desktop/CS-2340/Frontend/fin_test/toolbox/toolbox/worker.js"
+  );
+  worker.postMessage({
+    action: "connect",
+  });
+} catch (error) {
+  console.error("Failed to create worker:", error);
+}
+
+// Event listener for worker messages
+worker.on("message", (message) => {
+  if (message.status === "success") {
+    console.log("Worker completed successfully:", message.data);
+  } else if (message.status === "error") {
+    console.error("Worker failed:", message.error);
+  }
+});
+
+// Event listener for worker errors (if the worker crashes)
+worker.on("error", (error) => {
+  console.error("Worker error:", error);
+});
 // Create the 'audio' folder if it doesn't exist
 const audioFolder = path.join(__dirname, "audio");
 if (!fs.existsSync(audioFolder)) {
@@ -45,9 +73,9 @@ wss.on("connection", (ws) => {
     // Handle start and stop recording
     if (messageString === "start") {
       // startRecording();
-      // startRecordingnew();
+      startRecordingnew();
     } else if (messageString === "stop") {
-      // stopRecording();
+      stopRecording();
     }
   });
 
@@ -68,22 +96,6 @@ server.on("upgrade", (request, socket, head) => {
     wss.emit("connection", ws, request);
   });
 });
-
-let socket = new WebSocket("ws://71.241.245.11:41106");
-
-socket.onopen = () => {
-  console.log("WebSocket connected. Sending audio stream...");
-};
-
-socket.onmessage = (event) => {
-  console.log("Recieved this message");
-  console.log(event);
-  console.log("Received message from WebSocket server:", event.data);
-};
-
-socket.onerror = (error) => {
-  console.error("WebSocket error:", error.message);
-};
 
 // function startRecordingnew() {
 //   console.log("I AM IN THE START RECORING NEW");
@@ -198,7 +210,7 @@ function startRecordingnew() {
   let audioBuffer = Buffer.alloc(0); // Start with an empty buffer
 
   // Set a rate limit for sending data to avoid flooding the WebSocket
-  const SEND_INTERVAL = 200; // 200ms delay between sending data chunks
+  const SEND_INTERVAL = 400; // 200ms delay between sending data chunks
   const CHUNK_SIZE = 1024; // 1024 bytes chunk size
 
   // Timer to control the rate of sending
@@ -209,7 +221,6 @@ function startRecordingnew() {
     audioBuffer = Buffer.concat([audioBuffer, data]);
 
     // Process the buffer and send 536 bytes at a time
-    if (socket.readyState === WebSocket.OPEN) {
       while (audioBuffer.length >= CHUNK_SIZE) {
         const now = Date.now();
 
@@ -248,7 +259,6 @@ function startRecordingnew() {
             outputData[i] = Math.max(-32768, Math.min(32767, outputData[i]));
           }
 
-
           // Create metadata with sample rate (this could be sent once or occasionally)
           let metadata = JSON.stringify({ sampleRate: 48000 });
           let metadataBytes = new TextEncoder().encode(metadata);
@@ -273,7 +283,8 @@ function startRecordingnew() {
           // console.log(outputData);
           // console.log("here is the meta data length buffer");
           // console.log(metadataLengthBuffer);
-
+          //         let metadataBytesBuffer = Buffer.from(metadataBytes);
+          //         let audioDataBuffer = Buffer.from(outputData.buffer);
           // Combine metadata length, metadata, and audio data buffers
           let combinedData2 = Buffer.concat([
             metadataLengthBuffer,
@@ -283,27 +294,28 @@ function startRecordingnew() {
           // console.log(combinedData2);
           // console.log(combinedData2.length);
           // try {
-          //   socket.send(combinedData2);
-          //   console.log("DATA SENT SSUCCESSFUULLY");
-          // } catch (error) {
-          //   console.error("Error sending data:", error);
-          // }
-          // console.log("FAKE SEND");
-          const simpleMessage = "Hello WebSocket!";
-          socket.send(simpleMessage);
-          // socket.send(combinedData2);
-          sox.kill();
+          console.log("before posting a message");
+          worker.postMessage({
+            data: combinedData2,
+            action: "sendData",
+          });
+          // Handle responses from the worker (optional)
+          worker.on("message", (message) => {
+            console.log("Worker responded:", message);
+          });
+          // Error handling for worker
+          worker.on("error", (err) => {
+            console.error("Worker error:", err);
+          });
 
+          worker.on("exit", (exitCode) => {
+            if (exitCode !== 0) {
+              console.error(`Worker stopped with exit code ${exitCode}`);
+            }
+          });
         }
       }
-    }
   });
-
-  // Handle WebSocket closure to stop recording
-  socket.onclose = () => {
-    console.log("WebSocket connection closed.");
-    sox.kill(); // Stop recording when WebSocket connection is closed
-  };
 }
 
 // Start recording process
@@ -391,7 +403,7 @@ async function send_to_backend() {
     const payload = {
       context: context,
       userid: "generated_from_github", // Replace this with actual logic to fetch the Github user ID
-      conversationid: 10086, // Generate a random ID for the conversation
+      conversationid: id, // Generate a random ID for the conversation
     };
 
     // Convert the payload to a JSON string
@@ -438,7 +450,7 @@ async function send_to_backend() {
 
     const new_pay = {
       userid: "generated_from_github",
-      conversationid: 10086,
+      conversationid: id,
       prompt: "Write a basic calculator function starting from line 1",
     };
     await fetch("http://142.112.54.19:43186/prompt", {
@@ -641,16 +653,7 @@ function openSidebar() {
         break;
       case "addCode":
         console.log("Add code called");
-        const calculatorFilePath = path.join(__dirname, "calculator.py");
-        fs.readFile(calculatorFilePath, "utf8", (err, data) => {
-          if (err) {
-            console.error("Error reading calculator.py:", err);
-            return;
-          }
-          send_to_backend();
-          // insertCodeAtPosition(opened_editor, last_cursor_position, data);
-          // handleBackendResponseFromFile();
-        });
+        send_to_backend();
         break;
     }
   });
