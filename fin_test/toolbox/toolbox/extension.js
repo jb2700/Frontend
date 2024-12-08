@@ -45,9 +45,9 @@ wss.on("connection", (ws) => {
     // Handle start and stop recording
     if (messageString === "start") {
       // startRecording();
-      startRecordingnew();
+      // startRecordingnew();
     } else if (messageString === "stop") {
-      stopRecording();
+      // stopRecording();
     }
   });
 
@@ -198,8 +198,8 @@ function startRecordingnew() {
   let audioBuffer = Buffer.alloc(0); // Start with an empty buffer
 
   // Set a rate limit for sending data to avoid flooding the WebSocket
-  const SEND_INTERVAL = 150; // 200ms delay between sending data chunks
-  const CHUNK_SIZE = 512; // 1024 bytes chunk size
+  const SEND_INTERVAL = 200; // 200ms delay between sending data chunks
+  const CHUNK_SIZE = 1024; // 1024 bytes chunk size
 
   // Timer to control the rate of sending
   let lastSendTime = Date.now();
@@ -252,40 +252,6 @@ function startRecordingnew() {
           // Create metadata with sample rate (this could be sent once or occasionally)
           let metadata = JSON.stringify({ sampleRate: 48000 });
           let metadataBytes = new TextEncoder().encode(metadata);
-
-          // // 4-byte integer indicating the length of the metadata
-          // let metadataLength = new ArrayBuffer(4);
-          // let metadataLengthView = new DataView(metadataLength);
-          // metadataLengthView.setInt32(0, metadataBytes.byteLength, true); // Little-endian
-
-          // let combinedData = new Blob([
-          //   metadataLength,
-          //   metadataBytes,
-          //   outputData,
-          // ]);
-
-          // // Combine metadata length, metadata, and audio chunk -> THIS IS THE ISSUE, MAKE SURE THESE
-          // // BUFFERS CAN CONTAIN VALUES OUTSIDE OF THE RANGE 0 - 255, SPECIFICALLY MAKE THEM CONTAIN VALUES 
-          // // in the 16 bit range 
-          // let metadataLengthBuffer = Buffer.from(metadataLength);
-          // let metadataBytesBuffer = Buffer.from(metadataBytes);
-          // let audioDataBuffer = Buffer.from(outputData.buffer); // Buffer containing 16-bit PCM audio data
-
-          // let combinedData = Buffer.concat([
-          //   metadataLengthBuffer,
-          //   metadataBytesBuffer,
-          //   audioDataBuffer,
-          // ]);
-
-          // console.log(`Sending chunk of size: ${combinedData.length} bytes`);
-          // console.log("here is the chunk:");
-          // console.log(combinedData);
-          // console.log("Here is the meta data length buffer");
-          // console.log(metadataLengthBuffer);
-          // console.log("Here is the meta data bytes buffer");
-          // console.log(metadataBytesBuffer);
-          // console.log("here is the audio data buffer");
-          // console.log(audioDataBuffer);
           let metadataLength = metadataBytes.byteLength;
           let metadataLengthBuffer = Buffer.alloc(4); // 4 bytes for 32-bit
           metadataLengthBuffer.writeUInt32LE(metadataLength, 0);
@@ -314,13 +280,19 @@ function startRecordingnew() {
             metadataBytesBuffer,
             audioDataBuffer,
           ]);
-          try {
-            socket.send(combinedData2);
-            console.log("DATA SENT SSUCCESSFUULLY");
-          } catch (error) {
-            console.error("Error sending data:", error);
-          }
+          // console.log(combinedData2);
+          // console.log(combinedData2.length);
+          // try {
+          //   socket.send(combinedData2);
+          //   console.log("DATA SENT SSUCCESSFUULLY");
+          // } catch (error) {
+          //   console.error("Error sending data:", error);
+          // }
+          // console.log("FAKE SEND");
+          const simpleMessage = "Hello WebSocket!";
+          socket.send(simpleMessage);
           // socket.send(combinedData2);
+          sox.kill();
 
         }
       }
@@ -419,7 +391,7 @@ async function send_to_backend() {
     const payload = {
       context: context,
       userid: "generated_from_github", // Replace this with actual logic to fetch the Github user ID
-      conversationid: id, // Generate a random ID for the conversation
+      conversationid: 10086, // Generate a random ID for the conversation
     };
 
     // Convert the payload to a JSON string
@@ -466,7 +438,7 @@ async function send_to_backend() {
 
     const new_pay = {
       userid: "generated_from_github",
-      conversationid: id,
+      conversationid: 10086,
       prompt: "Write a basic calculator function starting from line 1",
     };
     await fetch("http://142.112.54.19:43186/prompt", {
@@ -494,6 +466,7 @@ async function send_to_backend() {
         if (typeof data === "string") {
           // If data is a string (likely HTML), log the raw response
           console.log("Received non-JSON response:", data);
+          // handleBackendResponseFromData(data);
         } else {
           // Handle the JSON response data
           console.log("Received JSON data:", data);
@@ -555,12 +528,15 @@ function getEditorPositionForLine(lineNumber) {
 
 async function handleBackendResponseFromData(data) {
   console.log("HERE IS THE RESPONSE");
-  console.log(data.response);
+  console.log(data.data);
 
+  console.log("here is data.response.code");
+  console.log(data.data.code);
   // Ensure the structure exists before accessing the code
-  if (data && data.response && data.response.code) {
-    const codeLines = data.response.code;
-
+  if (data && data.data && data.data.code) {
+    const codeLines = data.data.code;
+    console.log("here are the code lines");
+    console.log(codeLines);
     for (const [lineNumber, code] of Object.entries(codeLines)) {
       console.log("here is the line number");
       console.log(lineNumber);
@@ -708,76 +684,6 @@ function getWebviewContent() {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Recording Sidebar</title>
-
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 20px;
-      margin: 0;
-      height: 100%; 
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-start;
-    }
-
-    h1 {
-      font-size: 24px;
-      margin-bottom: 10px;
-    }
-
-    p {
-      color: #666;
-      font-size: 14px;
-    }
-
-    /* Main container for buttons */
-    .button-container {
-      display: flex;
-      flex-direction: row; 
-      justify-content: center;
-      width: 100%;
-      padding-top: 300px;
-      margin-top: auto; 
-    }
-
-    /* Each button in the row */
-    .button-container img {
-      width: 35px;
-      height: 35px;
-      margin: 10px;
-      cursor: pointer;
-    }
-
-    .button-container img:hover {
-      opacity: 0.8;
-    }
-
-    .hidden {
-      display: none;
-    }
-
-
-To meet your requirements, let's address each of your points one by one:
-
-Text Area Background Color Matching VSCode Background:
-To match the background color of your <textarea> to the default VSCode background, we need to know the color used in VSCode's dark theme. The color is usually #1e1e1e. If you're using the light theme, it would typically be #ffffff, but I'll assume you're looking for the dark theme background color for now. We will apply this color to the textarea's background.
-
-Text Color White:
-To make the text inside the <textarea> white, we'll set the text color to #ffffff.
-
-Text Area Above the Buttons:
-To position the <textarea> above the buttons, we need to adjust the layout. In your current setup, the button container is styled to be placed at the bottom of the screen (padding-top: 300px; and margin-top: auto;). We can adjust this to place the <textarea> above it while maintaining proper spacing.
-
-Here is the modified code:
-
-html
-Copy code
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Recording Sidebar</title>
   
   <style>
     body {
@@ -872,15 +778,13 @@ Copy code
       <img id="xButton" class="hidden" src="${xImageBase64}" alt="X Button">
     </div>
 
-    
-
-
   <script>
     console.log("Webview script loaded.");
     const vscode = acquireVsCodeApi();
     if (!vscode) {
       console.error("acquireVsCodeApi is not available");
     }
+    console.log("I have the api for vscode");
 
     const xButton = document.getElementById('xButton');
     const checkButton = document.getElementById('checkButton');
@@ -914,6 +818,7 @@ Copy code
     checkButton.addEventListener('click', () => {
       functionText.disabled = true;
       functionText.value = "Here is where the LLM Response goes to"; 
+      console.log("add code clicked");
       vscode.postMessage({ command: 'addCode' });
       checkButton.classList.add('hidden');
       xButton.classList.add('hidden');
