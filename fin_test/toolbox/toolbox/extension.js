@@ -3,7 +3,7 @@
 const vscode = require("vscode");
 const Microphone = require("node-microphone");
 const wav = require("wav");
-const { Worker } = require("worker_threads");
+// const { Worker } = require("worker_threads");
 const express = require("express");
 const path = require("path");
 const bodyParser = require("body-parser");
@@ -17,35 +17,42 @@ const port = 4001;
 const fs = require("fs");
 const { exec } = require("child_process");
 
-const wss = new WebSocket.Server({ noServer: true });
+let panel;
 
-let worker;
-
-try {
-  // Attempt to create a worker
-  worker = new Worker(
-    "/Users/jbeaudry/Desktop/CS-2340/Frontend/fin_test/toolbox/toolbox/worker.js"
-  );
-  worker.postMessage({
-    action: "connect",
+let socket;
+let transctiption = "";
+function connect_real_socket() {
+  // socket = new WebSocket("ws://142.112.54.19:43102");
+  socket = new WebSocket("ws://71.241.245.11:40978");
+  console.log("HERE I AM ");
+  socket.on("open", () => {
+    console.log("gijjiorgrijoijogjioeriojgijo");
+    console.log("Worker WebSocket connected");
   });
-} catch (error) {
-  console.error("Failed to create worker:", error);
+
+  socket.on("message", (data) => {
+    const message = String(data);
+    console.log("Received message from WebSocket: ", message);
+    try {
+      const parsedMessage = JSON.parse(message);
+      transctiption = parsedMessage.transcription;
+    } catch (error) {
+      console.error("Error parsing WebSocket message:", error);
+    }
+    // console.log(message[transcription]);
+    // transctiption = message;
+    console.log("here is teh transcription")
+    console.log(transctiption);
+    sendTranscriptionToWebview(panel);
+  });
 }
 
-// Event listener for worker messages
-worker.on("message", (message) => {
-  if (message.status === "success") {
-    console.log("Worker completed successfully:", message.data);
-  } else if (message.status === "error") {
-    console.error("Worker failed:", message.error);
-  }
-});
 
-// Event listener for worker errors (if the worker crashes)
-worker.on("error", (error) => {
-  console.error("Worker error:", error);
-});
+const wss = new WebSocket.Server({ noServer: true });
+
+
+let recording_bool = false;
+
 // Create the 'audio' folder if it doesn't exist
 const audioFolder = path.join(__dirname, "audio");
 if (!fs.existsSync(audioFolder)) {
@@ -72,9 +79,12 @@ wss.on("connection", (ws) => {
     console.log(`Received message: ${messageString}`);
     // Handle start and stop recording
     if (messageString === "start") {
-      // startRecording();
-      startRecordingnew();
+      startRecording();
+      recording_bool = true;
+      // startRecordingnew();
     } else if (messageString === "stop") {
+      // recording_bool = false;
+      console.log("Stopped recording");
       stopRecording();
     }
   });
@@ -97,233 +107,17 @@ server.on("upgrade", (request, socket, head) => {
   });
 });
 
-// function startRecordingnew() {
-//   console.log("I AM IN THE START RECORING NEW");
-
-//   // Start recording with sox, piping the output to stdout
-//   const sox = exec(
-//     `sox -d -r 48000 -c 1 -b 32 -t raw -`, // Stream raw 32-bit PCM
-//     { encoding: "buffer" }, // Ensures we get the output as a raw Buffer
-//     (error, stdout, stderr) => {
-//       if (error) {
-//         console.error(`Error starting recording: ${error.message}`);
-//         return;
-//       }
-//       if (stderr) {
-//         console.error(`stderr: ${stderr}`);
-//         return;
-//       }
-//       console.log(`stdout: ${stdout}`);
-//     }
-//   );
-
-//   let audioBuffer = Buffer.alloc(0); // Start with an empty buffer
-
-//   sox.stdout.on("data", (data) => {
-//     // console.log("Received new chunk of data from sox");
-
-//     // Append the incoming data to the buffer
-//     audioBuffer = Buffer.concat([audioBuffer, data]);
-
-//     // Check if WebSocket is open
-//     if (socket.readyState === WebSocket.OPEN) {
-//       // console.log("SOCKET IS READY");
-
-//       const CHUNK_SIZE = 536; // Target chunk size in bytes
-
-//       // While we have more data in the buffer, send it in chunks of 536 bytes
-//       while (audioBuffer.length >= CHUNK_SIZE) {
-//         // Extract a chunk of the specified size (536 bytes)
-//         const chunk = audioBuffer.slice(0, CHUNK_SIZE);
-
-//         // Remove the chunk from the buffer (advance buffer start)
-//         audioBuffer = audioBuffer.slice(CHUNK_SIZE);
-
-//         // Convert the raw 32-bit PCM data in 'chunk' to 16-bit PCM
-//         let inputData = new Int32Array(chunk.buffer); // Assuming the data is raw 32-bit PCM
-//         let outputData = new Int16Array(inputData.length);
-
-//         // Convert the 32-bit PCM to 16-bit PCM (clipping if necessary)
-//         for (let i = 0; i < inputData.length; i++) {
-//           outputData[i] = Math.max(
-//             -32768,
-//             Math.min(32767, inputData[i] * 32768)
-//           ); // Clip to 16-bit range
-//         }
-
-//         // Create metadata with sample rate
-//         let metadata = JSON.stringify({ sampleRate: 48000 });
-//         let metadataBytes = new TextEncoder().encode(metadata);
-
-//         // 4-byte integer indicating the length of the metadata
-//         let metadataLength = new ArrayBuffer(4);
-//         let metadataLengthView = new DataView(metadataLength);
-//         metadataLengthView.setInt32(0, metadataBytes.byteLength, true); // Little-endian
-
-//         // Combine metadata length, metadata, and audio chunk
-//         let metadataLengthBuffer = Buffer.from(metadataLength);
-//         let metadataBytesBuffer = Buffer.from(metadataBytes);
-//         let audioDataBuffer = Buffer.from(outputData.buffer); // Buffer containing 16-bit PCM audio data
-
-//         let combinedData = Buffer.concat([
-//           metadataLengthBuffer,
-//           metadataBytesBuffer,
-//           audioDataBuffer,
-//         ]);
-
-//         // console.log(`Sending chunk of size: ${combinedData.length} bytes`);
-//         // console.log("HERE IS REAL DATA");
-//         // console.log(combinedData);
-//         // Send the combined data (metadata + audio) over WebSocket
-//         socket.send(combinedData);
-//       }
-//     }
-//   });
-
-//   // Handle WebSocket closure to stop recording
-//   socket.onclose = () => {
-//     console.log("WebSocket connection closed.");
-//     sox.kill(); // Stop recording when WebSocket connection is closed
-//   };
-// }
-
-function startRecordingnew() {
-  // console.log("I AM IN THE START RECORING NEW");
-
-  // Start recording with sox, piping the output to stdout
-  const sox = exec(
-    `sox -d -r 48000 -c 1 -b 32 -t raw -`, // Stream raw 32-bit PCM
-    { encoding: "buffer", maxBuffer: 1 * 1024 * 1024 }, // Max buffer size set to 1MB to prevent overflow
-    (error, stdout, stderr) => {
-      if (error) {
-        console.error(`Error starting recording: ${error.message}`);
-        return;
-      }
-      if (stderr) {
-        console.error(`stderr: ${stderr}`);
-        return;
-      }
-      console.log(`stdout: ${stdout}`);
-    }
-  );
-
-  let audioBuffer = Buffer.alloc(0); // Start with an empty buffer
-
-  // Set a rate limit for sending data to avoid flooding the WebSocket
-  const SEND_INTERVAL = 400; // 200ms delay between sending data chunks
-  const CHUNK_SIZE = 1024; // 1024 bytes chunk size
-
-  // Timer to control the rate of sending
-  let lastSendTime = Date.now();
-
-  sox.stdout.on("data", (data) => {
-    // Append the incoming data to the buffer
-    audioBuffer = Buffer.concat([audioBuffer, data]);
-
-    // Process the buffer and send 536 bytes at a time
-      while (audioBuffer.length >= CHUNK_SIZE) {
-        const now = Date.now();
-
-        // Only proceed if enough time has passed since the last send
-        if (now - lastSendTime >= SEND_INTERVAL) {
-          lastSendTime = now; // Update the time of the last send
-
-          let uint8Array = new Uint8Array(audioBuffer.buffer);
-
-          // Extract a chunk of the specified size (536 bytes)
-          const chunk = uint8Array.slice(0, CHUNK_SIZE);
-
-          // Remove the chunk from the buffer (advance buffer start)
-          audioBuffer = Buffer.from(uint8Array.slice(CHUNK_SIZE));
-
-          // Convert the raw 32-bit PCM data in 'chunk' to 16-bit PCM
-          let inputData = new Int32Array(chunk.buffer); // Assuming the data is raw 32-bit PCM
-          // console.log("THIS IS THE INPUT DATA");
-          // console.log(inputData);
-          let outputData = new Int16Array(inputData.length);
-          // console.log("Here is input data");
-          // console.log(inputData);
-
-          for (let i = 0; i < inputData.length; i++) {
-            let value = inputData[i]; // Value from the 32-bit input data
-
-            // Normalize the value from 32-bit range (-2147483648 to 2147483647) to 16-bit range (-32768 to 32767)
-            // Scale the value from the range -2147483648 -> 2147483647 to the range -32768 -> 32767
-            let scaledValue = (value / 2147483647) * 32767;
-            // console.log("here is scaled value");
-            // console.log(scaledValue);
-            // Convert to an integer (round) to fit the 16-bit PCM format
-            outputData[i] = Math.round(scaledValue);
-
-            // Clip to the 16-bit range (-32768 to 32767) in case of rounding errors
-            outputData[i] = Math.max(-32768, Math.min(32767, outputData[i]));
-          }
-
-          // Create metadata with sample rate (this could be sent once or occasionally)
-          let metadata = JSON.stringify({ sampleRate: 48000 });
-          let metadataBytes = new TextEncoder().encode(metadata);
-          let metadataLength = metadataBytes.byteLength;
-          let metadataLengthBuffer = Buffer.alloc(4); // 4 bytes for 32-bit
-          metadataLengthBuffer.writeUInt32LE(metadataLength, 0);
-
-          // Convert metadataBytes to Buffer
-          let metadataBytesBuffer = Buffer.from(metadataBytes);
-
-          // Create a Buffer for the 16-bit PCM data (outputData)
-          let audioDataBuffer = Buffer.alloc(outputData.length * 2); // Each 16-bit value is 2 bytes
-
-          // Write the 16-bit PCM data into the buffer
-          for (let i = 0; i < outputData.length; i++) {
-            audioDataBuffer.writeInt16LE(outputData[i], i * 2); // Write little-endian 16-bit value
-          }
-
-          // console.log("here is the audio data bytes");
-          // console.log(audioDataBuffer);
-          // console.log("here is the output data");
-          // console.log(outputData);
-          // console.log("here is the meta data length buffer");
-          // console.log(metadataLengthBuffer);
-          //         let metadataBytesBuffer = Buffer.from(metadataBytes);
-          //         let audioDataBuffer = Buffer.from(outputData.buffer);
-          // Combine metadata length, metadata, and audio data buffers
-          let combinedData2 = Buffer.concat([
-            metadataLengthBuffer,
-            metadataBytesBuffer,
-            audioDataBuffer,
-          ]);
-          // console.log(combinedData2);
-          // console.log(combinedData2.length);
-          // try {
-          console.log("before posting a message");
-          worker.postMessage({
-            data: combinedData2,
-            action: "sendData",
-          });
-          // Handle responses from the worker (optional)
-          worker.on("message", (message) => {
-            console.log("Worker responded:", message);
-          });
-          // Error handling for worker
-          worker.on("error", (err) => {
-            console.error("Worker error:", err);
-          });
-
-          worker.on("exit", (exitCode) => {
-            if (exitCode !== 0) {
-              console.error(`Worker stopped with exit code ${exitCode}`);
-            }
-          });
-        }
-      }
+function sendTranscriptionToWebview(panel) {
+  panel.webview.postMessage({
+    command: "setTranscription",
+    transcription: transctiption,
   });
 }
 
 // Start recording process
 let recordingProcess = null;
-
+const outputFilePath = path.join(__dirname, "audio", "recording.wav");
 function startRecording() {
-  const outputFilePath = path.join(__dirname, "audio", "recording.wav");
-
   // Start recording with sox (for macOS)
   exec(`sox -d ${outputFilePath}`, (error, stdout, stderr) => {
     if (error) {
@@ -340,6 +134,42 @@ function startRecording() {
   console.log("Recording started...");
 }
 
+
+function sendWavFile() {
+  // Read the WAV file into a buffer
+  fs.readFile(outputFilePath, (err, data) => {
+    if (err) {
+      console.error("Error reading file:", err);
+      return;
+    }
+    // Wait for the WebSocket connection to be open
+    if (socket.readyState === WebSocket.OPEN) {
+      // Send the file data over the WebSocket
+      socket.send(data, (err) => {
+        if (err) {
+          console.error("Error sending file:", err);
+        } else {
+          console.log("HERE is the data I sent");
+          console.log(data);
+          console.log("File sent successfully");
+          let bool = false;
+          for (let i = 0; i < data.length; i++) {
+            if (data[i] < 0 || data[i] > 255) {
+              bool = true;
+            }
+          }
+          console.log("here is the boolean");
+          console.log(bool);
+
+        }
+      });
+    } else {
+      console.error("WebSocket is not open");
+    }
+  });
+}
+
+
 function stopRecording() {
   // Stop the recording by sending a SIGINT to the sox process
   exec("pkill sox", (error, stdout, stderr) => {
@@ -353,7 +183,10 @@ function stopRecording() {
     }
     console.log("Recording stopped and saved.");
   });
+  console.log("Before sending file");
+  sendWavFile();
 }
+
 // Serve static files (for WebView)
 app.use(express.static(path.join(__dirname, "public")));
 
@@ -451,7 +284,7 @@ async function send_to_backend() {
     const new_pay = {
       userid: "generated_from_github",
       conversationid: id,
-      prompt: "Write a basic calculator function starting from line 1",
+      prompt: "Edit this Calculator addition function to make it work as well as add multiplication and division",
     };
     await fetch("http://142.112.54.19:43186/prompt", {
       method: "POST",
@@ -547,13 +380,9 @@ async function handleBackendResponseFromData(data) {
   // Ensure the structure exists before accessing the code
   if (data && data.data && data.data.code) {
     const codeLines = data.data.code;
-    console.log("here are the code lines");
-    console.log(codeLines);
     for (const [lineNumber, code] of Object.entries(codeLines)) {
-      console.log("here is the line number");
-      console.log(lineNumber);
 
-      const position = getEditorPositionForLine(lineNumber);
+      const position = getEditorPositionForLine(parseInt(lineNumber) - 1);
 
       while (lineNumber > opened_editor.document.lineCount) {
         await insertCodeAtPosition(
@@ -562,7 +391,20 @@ async function handleBackendResponseFromData(data) {
           "\n"
         );
       }
-      console.log("BEFORE INSERT CODE");
+      const currentLineText = opened_editor.document.lineAt(
+        parseInt(lineNumber) - 1
+      ).text;
+      if (currentLineText && currentLineText.trim() !== "") {
+        await clear_code_at_position(
+          opened_editor,
+          position,
+          " ",
+          currentLineText.length,
+          parseInt(lineNumber)
+        );
+        // Clear the current line (replace with "")
+        // await insertCodeAtPosition(opened_editor, position, ""); // This clears the line
+      }
       await insertCodeAtPosition(opened_editor, position, code);
     }
   } else {
@@ -570,6 +412,27 @@ async function handleBackendResponseFromData(data) {
   }
 }
 
+async function clear_code_at_position(editor, position, code, length, line_num) {
+  const new_pos = new vscode.Position(line_num-1, length);
+  const range = new vscode.Range(position, new_pos);
+  console.log("Here is the range");
+  console.log(range);
+  try {
+    const success = await editor.edit((editBuilder) => {
+      // Replace the code at the specified position
+      editBuilder.replace(range, code); // Replace code at the specified position with a newline
+    });
+    if (success) {
+      console.log("Code replaced successfully!");
+    } else {
+      console.error("Failed to replace code.");
+    }
+  } catch (err) {
+    // Handle any specific errors that occur during the edit
+    console.error("Error during the code replace:", err);
+  }
+
+}
 // this function 100% works
 async function insertCodeAtPosition(editor, position, code) {
   try {
@@ -620,8 +483,10 @@ function trackCursorPosition() {
 
 function githubauth() {}
 
+
+
 function openSidebar() {
-  const panel = vscode.window.createWebviewPanel(
+  panel = vscode.window.createWebviewPanel(
     "helloWorldSidebar",
     "Hello World Sidebar",
     vscode.ViewColumn.Beside,
@@ -635,6 +500,7 @@ function openSidebar() {
   panel.webview.html = getWebviewContent();
 
   connectWebSocket();
+  connect_real_socket();
 
   panel.webview.onDidReceiveMessage((message) => {
     console.log("Message received:", message);
@@ -795,6 +661,15 @@ function getWebviewContent() {
     const stopButton = document.getElementById('stopButton');
     const functionText = document.getElementById('functionText');
 
+    window.addEventListener('message', (event) => {
+      const message = event.data;
+      if (message.command === 'setTranscription') {
+        console.log('Received transcription:', message.transcription);
+
+        functionText.value = message.transcription; 
+      }
+    });
+
     // Event listener for the "Play" button
     playButton.addEventListener('click', () => {
       playButton.classList.add('hidden');
@@ -813,7 +688,7 @@ function getWebviewContent() {
       // When stop is clicked, make the text box editable and change its content
       functionText.style.display = 'block';
       functionText.disabled = false;
-      functionText.value = "Write a basic Calculator function for me"; 
+      functionText.value = "Waiting for Llama Response ..."; 
       checkButton.classList.remove('hidden');
       xButton.classList.remove('hidden');
     });
@@ -825,7 +700,7 @@ function getWebviewContent() {
       vscode.postMessage({ command: 'addCode' });
       checkButton.classList.add('hidden');
       xButton.classList.add('hidden');
-      functionText.style.display = 'none';
+      functionText.style.visibility = 'hidden';
       playButton.classList.remove('hidden');
     });
 
@@ -833,7 +708,7 @@ function getWebviewContent() {
       functionText.value = ""; 
       checkButton.classList.add('hidden');
       xButton.classList.add('hidden');
-      functionText.style.display = 'none';
+      functionText.style.visibility = 'hidden';
       playButton.classList.remove('hidden');
     });
   </script>
