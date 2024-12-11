@@ -65,6 +65,9 @@ let last_cursor_position = null;
 let opened_editor = null;
 
 let backend_data = null;
+
+let explanation = null;
+let code = null;
 // Store the WebSocket clients
 let wsClient = null;
 
@@ -114,6 +117,37 @@ function sendTranscriptionToWebview(panel) {
     command: "setTranscription",
     transcription: transctiption,
   });
+}
+
+// Function to convert the object into a big string
+function convertToString(codeObject) {
+  let bigString = "";
+
+  // Iterate through the object and concatenate the values in the correct order
+  Object.keys(codeObject)
+    .sort((a, b) => a - b)  // Sort the keys (line numbers) in ascending order
+    .forEach((key) => {
+      bigString += codeObject[key] + "\n";  // Add each line's content followed by a newline
+    });
+
+  return bigString.trim();  // Optionally, trim to remove the last newline
+}
+
+function sendResponseToWebview(panel, data) {
+  console.log(data.data.explanation);
+  panel.webview.postMessage({
+    command: "setResponse",
+    explanation: data.data.explanation,
+    code: convertToString(data.data.code),
+  });
+  // if (message.command === "setResponse") {
+  //   console.log("set response called");
+  //   console.log("Here is the explanation");
+  //   console.log("Here is the code");
+
+  //   functionText.value =
+  //     "Explanation: " + message.explanation + "\n" + "Code: " + message.code;
+  // }
 }
 
 // Start recording process
@@ -320,7 +354,7 @@ async function send_to_backend(passed_in_prompt) {
           console.log("Received JSON data:", data);
           console.log("here is data");
           backend_data = data;
-          
+          sendResponseToWebview(panel, data);
           
         }
       })
@@ -528,9 +562,8 @@ function openSidebar() {
       case "addCode":
         console.log("Add code called");
         
-        // if (data) {
         handleBackendResponseFromData(backend_data);
-        // }
+
         break;
       case "sendBack":
         console.log("Here is the data");
@@ -697,6 +730,16 @@ function getWebviewContent() {
 
         functionText.value = message.transcription; 
       }
+      if (message.command === 'setResponse') {
+        console.log("set response called");
+        console.log("Here is the explanation");
+        console.log("Here is the code");
+
+        functionText.value = "Explanation: " + message.explanation;
+        functionText.value += "                                                    "
+        functionText.value += "Code: " + message.code;
+      }
+      
     });
 
     // Event listener for the "Play" button
