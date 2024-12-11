@@ -790,6 +790,7 @@ function getWebviewContent() {
 
       // When stop is clicked, make the text box editable and change its content
       functionText.style.display = 'block';
+      functionText.style.visibility = 'visible';
       functionText.disabled = false;
       refreshButton.classList.remove('hidden');
       sendButton.classList.remove('hidden');
@@ -826,50 +827,3 @@ module.exports = {
   activate,
   deactivate,
 };
-
-// // async -> IP: 142.112.54.19:43186
-// function handleBackendResponseFromFile() {
-//   const filePath = path.join(__dirname, "sample_backend.json");
-
-//   // Read the backend response from the file
-//   fs.readFile(filePath, "utf8", async (err, data) => {
-//     if (err) {
-//       console.error("Error reading backend response file:", err);
-//       return;
-//     }
-
-//     // Parse the backend JSON response
-//     let backendResponse;
-//     try {
-//       backendResponse = JSON.parse(data);
-//     } catch (parseErr) {
-//       console.error("Error parsing backend response JSON:", parseErr);
-//       return;
-//     }
-
-//     // Ensure the structure exists before accessing the code
-//     if (
-//       backendResponse &&
-//       backendResponse.response &&
-//       backendResponse.response.message.content.code
-//     ) {
-//       const codeLines = backendResponse.response.message.content.code;
-
-//       // Iterate over the code lines from the backend and insert them in the editor at the correct positions
-//       for (const [lineNumber, code] of Object.entries(codeLines)) {
-//         console.log("here is the line number");
-//         console.log(lineNumber);
-
-//         // Convert lineNumber to an integer for correct position
-//         const position = getEditorPositionForLine(lineNumber);
-//         console.log("POSITION RETURNED FROM VSCODE");
-//         console.log(position);
-
-//         // Insert the code at the correct position
-//         await insertCodeAtPosition(opened_editor, position, code + '\n'); // Await to ensure sequential execution
-//       }
-//     } else {
-//       console.error("No code found in the backend response.");
-//     }
-//   });
-// }
