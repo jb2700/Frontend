@@ -545,6 +545,14 @@ function getWebviewContent() {
   const xImageBase64 = convertImageToBase64(
     path.join(__dirname, "images", "Cancel.png")
   );
+  const refreshBase64 = convertImageToBase64(
+    path.join(__dirname, "images", "refresh.png")
+  );
+  const sendBase64 = convertImageToBase64(
+    path.join(__dirname, "images", "send.png")
+  );
+  // console.log(refreshBase64);
+  // console.log(sendBase64);
 
   return `
 <!DOCTYPE html>
@@ -645,6 +653,8 @@ function getWebviewContent() {
       <img id="stopButton" class="hidden" src="${stopImageBase64}" alt="Stop Button">
       <img id="checkButton" class="hidden" src="${checkImageBase64}" alt="Check Button">
       <img id="xButton" class="hidden" src="${xImageBase64}" alt="X Button">
+      <img id="refreshButton" class="hidden" src="${refreshBase64}" alt="Refresh Button">
+      <img id="sendButton" class="hidden" src="${sendBase64}" alt="Send Button">
     </div>
 
   <script>
@@ -678,6 +688,24 @@ function getWebviewContent() {
       vscode.postMessage({ command: 'play' });
     });
 
+    refreshButton.addEventListener('click', () => {
+      functionText.value = "";
+      sendButton.classList.add('hidden');
+      refreshButton.classList.add('hidden');
+      functionText.style.visibility = 'hidden';
+      playButton.classList.remove('hidden');
+    });
+
+    sendButton.addEventListener('click', () => {
+      functionText.value = "Waiting for Llama Response ...";
+      console.log("add code clicked");
+      vscode.postMessage({ command: 'sendBack' });
+      sendButton.classList.add('hidden');
+      refreshButton.classList.add('hidden');
+      checkButton.classList.remove('hidden');
+      xButton.classList.remove('hidden');
+    });
+
     // Event listener for the "Stop" button
     stopButton.addEventListener('click', () => {
       stopButton.classList.add('hidden');
@@ -689,8 +717,8 @@ function getWebviewContent() {
       functionText.style.display = 'block';
       functionText.disabled = false;
       functionText.value = "Waiting for Llama Response ..."; 
-      checkButton.classList.remove('hidden');
-      xButton.classList.remove('hidden');
+      refreshButton.classList.remove('hidden');
+      sendButton.classList.remove('hidden');
     });
 
     checkButton.addEventListener('click', () => {
