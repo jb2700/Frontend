@@ -23,8 +23,8 @@ let panel;
 let socket;
 let transctiption = "";
 function connect_real_socket() {
-  // socket = new WebSocket("ws://142.112.54.19:43102");
-  socket = new WebSocket("ws://71.241.245.11:40978");
+  socket = new WebSocket("ws://142.112.54.19:43102");
+  // socket = new WebSocket("ws://71.241.245.11:40978");
   console.log("HERE I AM ");
   socket.on("open", () => {
     console.log("gijjiorgrijoijogjioeriojgijo");
@@ -131,6 +131,14 @@ function convertToString(codeObject) {
     });
 
   return bigString.trim();  // Optionally, trim to remove the last newline
+}
+
+function sendBadResponseToWebview(panel, data) {
+  console.log(data);
+  panel.webview.postMessage({
+    command: "badResponse",
+    data: data
+  });
 }
 
 function sendResponseToWebview(panel, data) {
@@ -348,6 +356,8 @@ async function send_to_backend(passed_in_prompt) {
           // If data is a string (likely HTML), log the raw response
           console.log("Received non-JSON response:", data);
           // handleBackendResponseFromData(data);
+          sendBadResponseToWebview(panel, data);
+          backend_data = null;
           
         } else {
           // Handle the JSON response data
@@ -561,16 +571,15 @@ function openSidebar() {
         break;
       case "addCode":
         console.log("Add code called");
-        
-        handleBackendResponseFromData(backend_data);
-
+        if (backend_data) {
+          handleBackendResponseFromData(backend_data);
+        }
         break;
       case "sendBack":
         console.log("Here is the data");
         console.log(message.data);
         send_to_backend(message.data);
         console.log("send back called");
-        
         break;
 
     }
@@ -738,6 +747,9 @@ function getWebviewContent() {
         functionText.value = "Explanation: " + message.explanation;
         functionText.value += "                                                    "
         functionText.value += "Code: " + message.code;
+      }
+      if (message.command === 'badResponse') {
+        functionText.value = message.data;
       }
       
     });

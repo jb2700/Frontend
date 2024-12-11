@@ -1,7 +1,14 @@
 {
   "context": {
-    "1": ""
+    "1": "class Calculator():",
+    "2": "    def add(a, b):",
+    "3": "        c = a - b",
+    "4": "        return c",
+    "5": "    ",
+    "6": "    def subtract(a, b):",
+    "7": "        c = a - b",
+    "8": "        return c"
   },
   "userid": "generated_from_github",
-  "conversationid": 601138
+  "conversationid": 416766
 }
