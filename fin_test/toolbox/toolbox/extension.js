@@ -1,4 +1,5 @@
 // The module 'vscode' contains the VS Code extensibility API
+
 // Import the module and reference it with the alias vscode in your code below
 const vscode = require("vscode");
 const Microphone = require("node-microphone");
@@ -63,6 +64,7 @@ let last_cursor_position = null;
 
 let opened_editor = null;
 
+let backend_data = null;
 // Store the WebSocket clients
 let wsClient = null;
 
@@ -217,7 +219,7 @@ function generateRandomId() {
   return Math.floor(Math.random() * 1000000); // Example of random ID generation
 }
 
-async function send_to_backend() {
+async function send_to_backend(passed_in_prompt) {
   if (opened_editor) {
     const document = opened_editor.document;
     const text = document.getText();
@@ -284,7 +286,7 @@ async function send_to_backend() {
     const new_pay = {
       userid: "generated_from_github",
       conversationid: id,
-      prompt: "Edit this Calculator addition function to make it work as well as add multiplication and division",
+      prompt: passed_in_prompt,
     };
     await fetch("http://142.112.54.19:43186/prompt", {
       method: "POST",
@@ -312,15 +314,20 @@ async function send_to_backend() {
           // If data is a string (likely HTML), log the raw response
           console.log("Received non-JSON response:", data);
           // handleBackendResponseFromData(data);
+          
         } else {
           // Handle the JSON response data
           console.log("Received JSON data:", data);
-          handleBackendResponseFromData(data);
+          console.log("here is data");
+          backend_data = data;
+          
+          
         }
       })
       .catch((error) => {
         // Handle any errors
         console.error("Error:", error);
+        
       });
   }
 }
@@ -372,6 +379,7 @@ function getEditorPositionForLine(lineNumber) {
 }
 
 async function handleBackendResponseFromData(data) {
+  console.log(data);
   console.log("HERE IS THE RESPONSE");
   console.log(data.data);
 
@@ -501,7 +509,7 @@ function openSidebar() {
 
   connectWebSocket();
   connect_real_socket();
-
+  let data;
   panel.webview.onDidReceiveMessage((message) => {
     console.log("Message received:", message);
     switch (message.command) {
@@ -519,8 +527,19 @@ function openSidebar() {
         break;
       case "addCode":
         console.log("Add code called");
-        send_to_backend();
+        
+        // if (data) {
+        handleBackendResponseFromData(backend_data);
+        // }
         break;
+      case "sendBack":
+        console.log("Here is the data");
+        console.log(message.data);
+        send_to_backend(message.data);
+        console.log("send back called");
+        
+        break;
+
     }
   });
 }
@@ -697,9 +716,9 @@ function getWebviewContent() {
     });
 
     sendButton.addEventListener('click', () => {
+      vscode.postMessage({ command: 'sendBack', data: functionText.value });
       functionText.value = "Waiting for Llama Response ...";
       console.log("add code clicked");
-      vscode.postMessage({ command: 'sendBack' });
       sendButton.classList.add('hidden');
       refreshButton.classList.add('hidden');
       checkButton.classList.remove('hidden');
@@ -708,6 +727,7 @@ function getWebviewContent() {
 
     // Event listener for the "Stop" button
     stopButton.addEventListener('click', () => {
+      functionText.value = "Waiting for Transcription ..."; 
       stopButton.classList.add('hidden');
       playButton.classList.add('hidden');
       console.log("Stop button clicked");
@@ -716,7 +736,6 @@ function getWebviewContent() {
       // When stop is clicked, make the text box editable and change its content
       functionText.style.display = 'block';
       functionText.disabled = false;
-      functionText.value = "Waiting for Llama Response ..."; 
       refreshButton.classList.remove('hidden');
       sendButton.classList.remove('hidden');
     });
