@@ -19,8 +19,6 @@ const GITHUB_CLIENT_SECRET = "4551e1e83b21aa32527514e1c3495fed10c34227";
 const REDIRECT_URI = "vscode://speech2code.toolbox/callback";
 
 
-
-
 const fs = require("fs");
 const { exec } = require("child_process");
 
