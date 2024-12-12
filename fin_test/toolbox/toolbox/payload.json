@@ -1,18 +1,7 @@
 {
   "context": {
-    "1": "# No code to be executed",
-    "2": "def calculator(num1, operator, num2):",
-    "3": "    # Define a dictionary to map operators to their corresponding functions",
-    "4": "    operations = {",
-    "5": "        '+': lambda x, y: x + y,",
-    "6": "        '-': lambda x, y: x - y,",
-    "7": "        '*': lambda x, y: x * y,",
-    "8": "        '/': lambda x, y: x / y if y != 0 else float('inf')",
-    "9": "    }",
-    "10": "",
-    "11": "    return operations.get(operator)(num1, num2)",
-    "12": ""
+    "1": ""
   },
   "userid": "generated_from_github",
-  "conversationid": 314690
+  "conversationid": 397886
 }
