@@ -1,5 +1,17 @@
-// The module 'vscode' contains the VS Code extensibility API
+/*
+ * Project Name: Speech to Code
+ * Author: STC Team
+ * Date: 12/12/2024
+ * Last Modified: 12/12/2024
+ * Version: 1.0
+ * Copyright (c) 2024 Brown University
+ * All rights reserved.
+ * This file is part of the STC project.
+ * Usage of this file is restricted to the terms specified in the
+ * accompanying LICENSE file.
+ */
 
+// The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 const vscode = require("vscode");
 const Microphone = require("node-microphone");
@@ -55,7 +67,6 @@ function connect_real_socket() {
 
 const wss = new WebSocket.Server({ noServer: true });
 
-
 let recording_bool = false;
 
 // Create the 'audio' folder if it doesn't exist
@@ -65,13 +76,11 @@ if (!fs.existsSync(audioFolder)) {
 }
 
 let last_cursor_position = null;
-
 let opened_editor = null;
-
 let backend_data = null;
-
 let explanation = null;
 let code = null;
+
 // Store the WebSocket clients
 let wsClient = null;
 
@@ -386,7 +395,11 @@ let loginPanel = null;
 // Your extension is activated the very first time the command is executed
 
 /**
- * @param {vscode.ExtensionContext} context
+ * Activates the extension and sets up GitHub authentication handling
+ * Registers commands and sets up URI handler for OAuth callback
+ * 
+ * @param {vscode.ExtensionContext} context - The VSCode extension context
+ * @returns {void}
  */
 function activate(context) {
   // Use the console to output diagnostic information (console.log) and errors (console.error)
@@ -394,6 +407,14 @@ function activate(context) {
   console.log('Congratulations, your extension "toolbox" is now active!');
 
   trackCursorPosition();
+  /**
+   * Handles GitHub authentication callback from OAuth flow
+   * Registered in the extension activation to handle OAuth redirect URI
+   * Processes the authentication code and exchanges it for an access token
+   * 
+   * @param {vscode.Uri} uri - The URI containing the OAuth callback parameters
+   * @returns {Promise<void>}
+   */
   vscode.window.registerUriHandler({
     handleUri: async (uri) => {
       const queryParams = new URLSearchParams(uri.query);
@@ -464,7 +485,13 @@ function activate(context) {
   context.subscriptions.push(github_auth);
 }
 
-
+/**
+ * Opens the GitHub login view in a new webview panel
+ * Creates a panel with a login interface that includes a GitHub login button
+ * The panel includes styled HTML content and handles login button click events
+ * 
+ * @returns {void}
+ */
 function openLoginView() {
   const panel = vscode.window.createWebviewPanel(
     "githubLogin",
@@ -549,12 +576,11 @@ function openLoginView() {
 
   panel.webview.onDidReceiveMessage((message) => {
     if (message.command === "githubLogin") {
-      // 用户点击了GitHub登录按钮后只打开GitHub的OAuth授权页面
       const authorizeUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${encodeURIComponent(
         REDIRECT_URI
       )}&scope=repo%20user`;
       vscode.env.openExternal(vscode.Uri.parse(authorizeUrl));
-      // 不再此处调用 openSidebar() 或 panel.dispose()
+      
     }
   });
 }
@@ -677,10 +703,23 @@ function trackCursorPosition() {
   });
 }
 
+/**
+ * Initiates the GitHub authentication process
+ * Currently an empty placeholder function for future implementation
+ * Used for testing before integrating features
+ * 
+ * @returns {void}
+ */
 function githubauth() {}
 
 
-
+/**
+ * Opens the main sidebar interface after successful authentication
+ * Creates a webview panel with recording controls and response display
+ * Sets up WebSocket connections for real-time communication
+ * 
+ * @returns {void}
+ */
 function openSidebar() {
   panel = vscode.window.createWebviewPanel(
     "helloWorldSidebar",
@@ -964,6 +1003,7 @@ function getWebviewContent() {
 </html>
 `;
 }
+
 
 function deactivate() {}
 
